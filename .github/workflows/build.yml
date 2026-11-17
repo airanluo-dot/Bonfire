@@ -81,10 +81,15 @@ jobs:
           }
           $application = Start-Process "$dest/Bonfire.exe" -PassThru
           Start-Sleep -Seconds 4
-          if ($application.HasExited) { throw "Installed Bonfire exited during startup ($($application.ExitCode))" }
+          if ($application.HasExited) {
+            Get-WinEvent -FilterHashtable @{LogName='Application';StartTime=(Get-Date).AddMinutes(-2)} -ErrorAction SilentlyContinue |
+              Where-Object { $_.Message -match 'Bonfire|Microsoft.ui.xaml|.NET Runtime' } | Select-Object -ExpandProperty Message
+            throw "Installed Bonfire exited during startup ($($application.ExitCode))"
+          }
           $application.CloseMainWindow() | Out-Null
           if (-not $application.WaitForExit(10000)) { throw 'Installed Bonfire did not close normally' }
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: windows-x64
           path: dist/*
