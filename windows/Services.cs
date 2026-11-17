@@ -82,7 +82,8 @@ internal sealed class Strings {
         var system = Windows.System.UserProfile.GlobalizationPreferences.Languages.FirstOrDefault() ?? "en";
         var tag = language == "system" ? system : language;
         var chosen = tag.StartsWith("zh",StringComparison.OrdinalIgnoreCase) ? "zh-Hans" : "en";
-        Microsoft.Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride = language == "system" ? "" : chosen;
+        // MRT Core unpackaged apps require a concrete language tag.
+        Microsoft.Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride = chosen;
         context = manager.CreateResourceContext();
         context.QualifierValues["Language"] = chosen;
         Culture = CultureInfo.GetCultureInfo(chosen);
