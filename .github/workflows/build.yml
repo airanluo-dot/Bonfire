@@ -1,0 +1,82 @@
+name: Build and test Bonfire
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  mac:
+    runs-on: xcode-27
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and run transfer tests on Apple Silicon
+        run: |
+          sw_vers
+          xcodebuild -version
+          test "$(uname -m)" = arm64
+          test "$(xcrun --sdk macosx --show-sdk-version | cut -d. -f1)" -ge 27
+          python3 tests/run.py
+          sh macos/build.sh "$RUNNER_TEMP/build"
+          sh macos/package.sh "$RUNNER_TEMP/build/Bonfire.app" dist
+      - name: Install and launch the shipped Mac application
+        run: |
+          sudo installer -pkg dist/*-Installer.pkg -target /
+          APP=/Applications/Bonfire.app
+          codesign --verify --strict --verbose "$APP"
+          cmp "$APP/Contents/MacOS/Bonfire" "$RUNNER_TEMP/build/Bonfire.app/Contents/MacOS/Bonfire"
+          open -n "$APP"
+          for i in {1..20}; do pgrep -x Bonfire >/dev/null && break; sleep 1; done
+          sleep 3
+          pgrep -x Bonfire
+          python3 tests/mac_window.py
+          ditto -x -k dist/*-Portable.zip "$RUNNER_TEMP/unpacked"
+          codesign --verify --strict "$RUNNER_TEMP/unpacked/Bonfire.app"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64
+          path: dist/*
+          compression-level: 0
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Build Windows app and test isolated saves
+        shell: cmd
+        run: |
+          for /f "usebackq delims=" %%V in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do call "%%V\VC\Auxiliary\Build\vcvars64.bat"
+          python tests/run.py
+          if errorlevel 1 exit /b 1
+          call windows\build.cmd "%RUNNER_TEMP%\build"
+      - name: Create portable ZIP and bilingual per-user installer
+        shell: pwsh
+        run: |
+          $tool = Join-Path $env:RUNNER_TEMP 'innosetup.exe'
+          $dir = Join-Path $env:RUNNER_TEMP 'Inno'
+          Invoke-WebRequest 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_4/innosetup-6.7.4.exe' -OutFile $tool
+          if ((Get-FileHash $tool).Hash -ne 'A549929319F9120716677C685535CA4671E4B937B5FDC87E2585F32D8EB30E8C') { throw 'Compiler checksum mismatch' }
+          $process = Start-Process -FilePath $tool -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=`"$dir`"") -WindowStyle Hidden -PassThru -Wait
+          if ($process.ExitCode) { throw "Compiler setup failed ($($process.ExitCode))" }
+          ./windows/package.ps1 -PublishDir "$env:RUNNER_TEMP/build/publish" -OutputDir dist -Compiler "$dir/ISCC.exe"
+      - name: Install and compare shipped Windows binaries
+        shell: pwsh
+        run: |
+          $dest = Join-Path $env:RUNNER_TEMP 'BonfireInstall'
+          $installer = (Get-ChildItem dist/*-Setup.exe).FullName
+          $process = Start-Process $installer -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=`"$dest`"") -WindowStyle Hidden -Wait -PassThru
+          if ($process.ExitCode) { throw 'Installation failed' }
+          $unpacked = Join-Path $env:RUNNER_TEMP 'BonfirePortable'
+          Expand-Archive (Get-ChildItem dist/*-Portable.zip).FullName $unpacked
+          foreach ($file in 'Bonfire.exe','Bonfire.dll','BonfireCore.dll','Bonfire.pri') {
+            if ((Get-FileHash "$dest/$file").Hash -ne (Get-FileHash "$unpacked/$file").Hash) { throw "Mismatch in $file" }
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: dist/*
+          compression-level: 0

@@ -1,0 +1,10 @@
+/build-*/
+/dist/
+/windows/bin/
+/windows/obj/
+/windows/Assets/Games/
+/windows/Strings/
+/windows/app.ico
+__pycache__/
+*.pyc
+.DS_Store

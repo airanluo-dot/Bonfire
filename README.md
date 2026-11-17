@@ -1,0 +1,57 @@
+# Bonfire
+
+Bonfire 是原生 Windows 和 Mac 单机游戏存档传送工具。当前适配《兽劳动》（Jurodo）。Windows x64 和 Apple Silicon 共用同一种 `.jurosave` 存档包。
+
+首个预发布版本为 **0.1.0 Beta 1**。在 [Releases](https://github.com/airanluo-dot/Bonfire/releases) 可下载 Windows x64 便携 ZIP、当前用户安装 EXE，以及 Mac arm64 便携 ZIP 和安装到“应用程序”的 PKG。
+
+## 使用
+
+- **游戏工作台**是启动页。在「APP资源库」选择游戏，进入「提取」或「接收」。提取页自动寻找安装和存档，接收页先预览所选存档包，再点击「替换存档」。两个页面均展示一份完整游戏进度和游戏时长。具有多个存档槽时，时长取最近保存的槽位，并标明槽号。
+- **存档管理器**从同一个资源库选择游戏，按生成时间从新到旧列出默认保存位置，以及此前成功提取或接收过存档包的目录。可以临时选择其他文件夹。时间线读取这些目录中的实际文件。文件改名后，新格式仍能识别生成时间。原工具的 v1 包从原始文件名恢复本地时间，无法恢复的排在最后。
+- **设置**直接打开。可以选择跟随系统、简体中文或 English，更改默认保存位置，或勾选两个资源库中显示的游戏。首次启动显示所有已注册游戏，默认保存到系统桌面。
+- 从侧栏重新进入任一游戏栏目或使用「更换游戏」都会返回当前栏目的资源库，并清除先前选中的接收目标。
+
+传送前请退出游戏。发现多个安装时需选定目标。接收只替换模块识别的存档文件，完成后逐文件核验。普通写入错误会用内存中的原内容撤回部分修改。强制终止或断电可中断多文件替换，恢复后可以重新接收同一个包。
+
+Bonfire 使用 Windows 当前用户注册表或 macOS 用户偏好保存配置及时间线所需的文件夹路径。运行时直接读写用户选择的存档，不维护缓存、索引数据库或备份副本。
+
+## 适配新的游戏
+
+1. 在 `adapters/<id>/` 放入 `<id>.cpp`、正方形 `icon.png` 和 `localization/en.json`、`localization/zh-Hans.json`。两个语言表都提供 `Game_<id>` 和模块自己的错误文案。名称和图标随应用分发。稳定 ID 以小写字母开头，只包含小写字母、数字和下划线。
+2. 实现 `GameAdapter` 并提供返回静态只读实例的 `transfer::<id>()` 工厂。参考 `adapters/jurodo/`。平台间的游戏目录和数据格式差异由各模块处理。
+3. 在 `adapters/catalog.def` 中注册一行 `BONFIRE_GAME(<id>)`。两个平台构建时由同一清单注册适配器并编入资源库。设置保存被隐藏的 ID，以便新适配的游戏默认可见。
+4. 验证双方真实游戏安装的定位。使用隔离目录测试首次存档、双向传送、其他游戏的包、损坏数据、重复接收及写入失败。测试专用的第二个适配器位于 `tests/fixture.hpp`。
+
+| 接口 | 职责 |
+| --- | --- |
+| `GameInfo` | 稳定 ID、专属 8 字节包标识、扩展名、可执行文件和定位线索 |
+| `identify`、`installation` | 识别安装、规范化数据根目录和安装位置 |
+| `saveDirectory`、`inventory` | 定位存档并返回结构化进度、游戏时长和对应的槽位 |
+| `acceptsEntry`、`validate` | 定义包内白名单并验证完整性，预览时只读 |
+| `capture`、`install` | 在游戏磁盘布局与通用条目之间转换，负责受控写入和失败恢复 |
+
+## 原生应用和共享层
+
+`windows/` 使用 WinUI 3、NavigationView、SelectorBar 与系统文件选择器。`macos/` 使用 AppKit、NSSplitViewController、统一工具栏、NSSegmentedControl 与 NSOpenPanel。两个工作台都调用 `app/runtime.cpp` 中的应用服务。服务按游戏 ID 查找适配器，负责进度读取、包预览、提取、替换和时间线查询。接收时重新检查预览过的包摘要。页面切换取消旧扫描并丢弃过期结果。
+
+`core/discovery.cpp` 根据模块的识别规则扫描安装位置。`core/transfer.cpp` 在传送前复核游戏身份和运行状态，加锁并核对读写结果。`core/save_files.cpp` 提供平面存档目录替换及写入错误时的内存撤回。模块可自行实现不同结构的安装逻辑。
+
+`core/package.cpp` 使用小端编码。v2 文件包含游戏标识、32 位格式版本、64 位 Unix 生成时间（毫秒）、32 位条目数、条目和末尾 SHA-256。每项保存 32 位名称长度、32 位数据长度、ASCII 逻辑名及原始数据。每项不超过 16 MiB，每包最多 256 项、总数据不超过 64 MiB。读取器保留对 v1 的支持。原先仅实现 v1 的客户端无法打开新写出的 v2 文件。
+
+## 双语开发约定
+
+通用界面文案维护在 `localization/`，游戏名称和专属文案维护在游戏自己的目录。共享层返回稳定标识、参数和数值。界面使用对应语言资源完成排版，可通过 `{0}`、`{1}` 调整语序，日期使用系统日期格式器。游戏包内已有的名称、文件名和路径按原文呈现。
+
+两端构建都先运行 `tools/resources.py`。它检查两个语言表的键集、重复键、空翻译、位置参数和游戏名称，生成 Windows MRT Core 的 RESW 以及 Mac 的 Localizable.strings 和 InfoPlist.strings。新增界面文案从源语言表修改，生成文件仅参与构建。
+
+## 构建和测试
+
+- **Windows 11 x64** 需要 Visual Studio x64 C++ 桌面工具、Windows SDK、.NET 10 SDK 和 Python 3。运行 `windows\build.cmd`。完整程序在 `build-win\publish\`，双击 `Bonfire.exe`。发布时分发整个目录。
+- **Apple Silicon** 需要 Xcode 命令行工具和 Python 3。运行 `sh macos/build.sh` 生成 `build-mac/Bonfire.app`。在装有 Xcode 27 的 Mac 上使用其 SDK 构建。脚本做本地 ad hoc 签名并调用 codesign 严格校验。公开发行的 Developer ID 签名、公证需要发布者凭据。
+- 两个构建脚本均可传入输出目录。在 Windows 的 x64 Native Tools 命令行中运行 `py -3 tests/run.py`，在 Mac 上运行 `python3 tests/run.py`。测试自动创建并清理临时游戏目录，检查完整往返、独立适配器、文件占用、v1 兼容、时间线排序与预览内容绑定。
+
+第三方代码许可见 `vendor/NOTICES.txt`。《兽劳动》图标来自游戏安装包。
+
+应用品牌占位图位于 `branding/AppIcon.icns`。常规构建复制 Mac 图标，并从同一文件里的多分辨率 PNG 生成 Windows 应用与安装器的 ICO。更换品牌图时替换这一份资源即可，游戏图标单独存放。
+
+版本号来自 `VERSION`。Windows 使用 Inno Setup 6.7.4 和 `windows/package.ps1`，Mac 使用 `sh macos/package.sh <Bonfire.app> <输出目录>`。构建工作流会在 Windows x64 和 macOS 27 Apple Silicon 上执行存档测试，并安装生成的包进行核对。

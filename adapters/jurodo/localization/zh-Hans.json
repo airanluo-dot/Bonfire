@@ -1,0 +1,12 @@
+{
+  "Jurodo_Format": "存档内容不完整，或不是本游戏支持的存档格式。",
+  "Jurodo_Index": "存档索引格式错误。",
+  "Jurodo_Title": "存档索引中的游戏名称与《兽劳动》不符。",
+  "Jurodo_Missing": "存档索引指向的进度文件缺失。",
+  "Jurodo_Mismatch": "进度文件与存档索引不匹配。",
+  "Jurodo_NoIndex": "没有找到存档索引，请先在游戏中保存一次。",
+  "Jurodo_Data": "存档内容格式错误。",
+  "Jurodo_NoData": "进度文件缺少游戏数据。",
+  "Jurodo_Empty": "尚无可提取的进度，请先在游戏中保存一次。",
+  "Game_jurodo": "兽劳动"
+}

@@ -1,0 +1,12 @@
+{
+  "Jurodo_Format": "The save is incomplete or uses an unsupported format.",
+  "Jurodo_Index": "The save index is malformed.",
+  "Jurodo_Title": "The index does not belong to Jurodo.",
+  "Jurodo_Missing": "An indexed progress file is missing.",
+  "Jurodo_Mismatch": "Progress files do not match the save index.",
+  "Jurodo_NoIndex": "No save index was found. Save once in the game.",
+  "Jurodo_Data": "The save data is malformed.",
+  "Jurodo_NoData": "The progress file is missing game data.",
+  "Jurodo_Empty": "No progress to export. Save once in the game.",
+  "Game_jurodo": "Jurodo"
+}
