@@ -79,6 +79,11 @@ jobs:
           foreach ($file in 'Bonfire.exe','Bonfire.dll','BonfireCore.dll','Bonfire.pri') {
             if ((Get-FileHash "$dest/$file").Hash -ne (Get-FileHash "$unpacked/$file").Hash) { throw "Mismatch in $file" }
           }
+          $application = Start-Process "$dest/Bonfire.exe" -PassThru
+          Start-Sleep -Seconds 4
+          if ($application.HasExited) { throw "Installed Bonfire exited during startup ($($application.ExitCode))" }
+          $application.CloseMainWindow() | Out-Null
+          if (-not $application.WaitForExit(10000)) { throw 'Installed Bonfire did not close normally' }
       - uses: actions/upload-artifact@v4
         with:
           name: windows-x64
