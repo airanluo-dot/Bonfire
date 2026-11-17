@@ -33,19 +33,28 @@ internal sealed class ReleaseUpdates(Preferences prefs, Func<bool> canInstall, A
     public string? LocalFile {get;private set;}
     public string CandidateVersion=>Candidate?["version"]?.ToString()??"";
     CancellationTokenSource generation=new();
+    Task active=Task.CompletedTask;
+    public async Task Stop(){
+        generation.Cancel();
+        await active;
+    }
 
     public void Reset(){
         generation.Cancel();generation.Dispose();generation=new();Busy=false;Candidate=null;LocalFile=null;Set("UpdateIdle");
     }
     void Set(string value){Status=value;Changed?.Invoke();}
-    async Task Execute(Func<CancellationToken,Task> op){
-        if(Busy)return;
+    Task Execute(Func<CancellationToken,Task> op){
+        if(Busy)return active;
+        active=ExecuteCore(op);
+        return active;
+    }
+    async Task ExecuteCore(Func<CancellationToken,Task> op){
         var token=generation.Token;Busy=true;
         try{await op(token);}
         catch(OperationCanceledException) when(token.IsCancellationRequested){}
         catch(ServiceError e){if(!token.IsCancellationRequested)Set(e.Message);}
         catch(Exception){if(!token.IsCancellationRequested)Set("UpdateFailed");}
-        finally{if(!token.IsCancellationRequested){Busy=false;Changed?.Invoke();}}
+        finally{if(token==generation.Token){Busy=false;Changed?.Invoke();}}
     }
 
     public Task Check() => Execute(async token=>{

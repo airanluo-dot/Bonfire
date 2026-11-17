@@ -281,6 +281,7 @@ static NSDictionary *call(NSDictionary *input,Stop stop){
     [self startPage:[self t:@"Settings"]];NSStackView *language=[self group:@"Language"];NSPopUpButton *select=[NSPopUpButton new];
     for(NSString *key in @[@"System",@"Chinese",@"English"])[select addItemWithTitle:[self t:key]];
     NSArray *tags=@[@"system",@"zh-Hans",@"en"];NSUInteger i=[tags indexOfObject:_prefs.language];[select selectItemAtIndex:i==NSNotFound?0:i];select.target=self;select.action=@selector(setLanguage:);[language addArrangedSubview:select];
+    [language addArrangedSubview:BFLabel([self t:@"SystemLanguageNote"],12,NSFontWeightRegular)];
     NSStackView *folder=[self group:@"DefaultFolder"];[folder addArrangedSubview:BFLabel(_prefs.destination,13,NSFontWeightRegular)];
     NSStackView *buttons=BFStack(NSUserInterfaceLayoutOrientationHorizontal,8);[folder addArrangedSubview:buttons];
     [buttons addArrangedSubview:BFButton([self t:@"ChooseFolder"],^{[self pick:YES game:NO done:^(NSString *p){self->_prefs.folder=p;[self->_prefs save];[self settings];}];})];

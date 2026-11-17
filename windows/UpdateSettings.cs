@@ -10,7 +10,7 @@ public sealed partial class MainWindow {
         var panel=updateGroup;panel.Children.Clear();
         var heading=Text(T("Updates"),16);heading.FontWeight=Microsoft.UI.Text.FontWeights.SemiBold;panel.Children.Add(heading);
         void Toggle(string key,bool value,Action<bool> setter,bool enabled=true){
-            var item=new ToggleSwitch{Header=T(key),IsOn=value,IsEnabled=enabled};
+            var item=new ToggleSwitch{Header=T(key),IsOn=value,IsEnabled=enabled,OnContent=T("On"),OffContent=T("Off")};
             item.Toggled+=(_,_)=>{setter(item.IsOn);SaveSettings();};panel.Children.Add(item);
         }
         Toggle("UpdateAutoCheck",prefs.AutoCheck,b=>prefs.AutoCheck=b);

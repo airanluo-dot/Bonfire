@@ -133,5 +133,8 @@
   "UpdateCollision": "下载目录中存在同名的不同文件。请移走该文件后重试。",
   "UpdateWait": "存档操作进行中，完成后可安装更新。",
   "UpdateManualMac": "当前位置无法替换应用。可在访达中打开已验证的更新包。",
-  "UpdateRelaunch": "更新已安装，重新打开 Bonfire 即可使用。"
+  "UpdateRelaunch": "更新已安装，重新打开 Bonfire 即可使用。",
+  "On": "开",
+  "Off": "关",
+  "SystemLanguageNote": "部分系统控件在重新打开应用后使用所选语言。"
 }

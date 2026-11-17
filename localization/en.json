@@ -133,5 +133,8 @@
   "UpdateCollision": "A different file with the same name is already in Downloads. Move it and try again.",
   "UpdateWait": "A save transfer is in progress. Install after it finishes.",
   "UpdateManualMac": "This app cannot be replaced in its current location. Open the verified download in Finder.",
-  "UpdateRelaunch": "Update installed. Reopen Bonfire to use it."
+  "UpdateRelaunch": "Update installed. Reopen Bonfire to use it.",
+  "On": "On",
+  "Off": "Off",
+  "SystemLanguageNote": "Some system controls use the selected language after reopening the app."
 }

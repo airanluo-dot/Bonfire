@@ -30,7 +30,10 @@ public sealed partial class MainWindow : Window {
         Title = "Bonfire";
         AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory,"app.ico"));
         AppWindow.Resize(new Windows.Graphics.SizeInt32(1080,760));
-        AppWindow.Closing += (_, e) => e.Cancel = writing;
+        AppWindow.Closing += async (_, e) => {
+            if(writing){e.Cancel=true;return;}
+            if(updates?.Busy==true){e.Cancel=true;await updates.Stop();Close();}
+        };
         games = Native.Call(new { op="catalog" }).AsArray();
         updates=new(prefs,()=>!writing,Close);
         updates.Changed+=ShowUpdateControls;
@@ -228,7 +231,7 @@ public sealed partial class MainWindow : Window {
         HeaderFor(T("Settings"));var page=Stack();status=Text("");
         var languages=Group(page,T("Language"));var choice=new ComboBox();
         string[] tags=["system","zh-Hans","en"];foreach(var key in new[]{"System","Chinese","English"})choice.Items.Add(T(key));
-        choice.SelectedIndex=Math.Max(0,Array.IndexOf(tags,prefs.Language));languages.Children.Add(choice);
+        choice.SelectedIndex=Math.Max(0,Array.IndexOf(tags,prefs.Language));languages.Children.Add(choice);languages.Children.Add(Text(T("SystemLanguageNote")));
         choice.SelectionChanged+=(_,_)=>{if(choice.SelectedIndex>=0){prefs.Language=tags[choice.SelectedIndex];strings.Set(prefs.Language);Enter("settings");SaveSettings();}};
         var folder=Group(page,T("DefaultFolder"));folder.Children.Add(Text(prefs.Destination));var actions=Line();
         actions.Children.Add(Button(T("ChooseFolder"),async()=>{var chosen=await Pick(true);if(chosen!=null){prefs.Folder=chosen;SettingsPage();SaveSettings();}}));

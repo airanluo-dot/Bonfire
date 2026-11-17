@@ -4,6 +4,8 @@
     NSBundle *_strings;
 }
 - (void)setLanguage:(NSString*)tag {
+    if([tag isEqual:@"system"])[NSUserDefaults.standardUserDefaults removeObjectForKey:@"AppleLanguages"];
+    else [NSUserDefaults.standardUserDefaults setObject:@[tag] forKey:@"AppleLanguages"];
     if([tag isEqual:@"system"]) tag=NSLocale.preferredLanguages.firstObject ?: @"en";
     NSString *language=[tag hasPrefix:@"zh"] ? @"zh-Hans" : @"en";
     _locale=[NSLocale localeWithLocaleIdentifier:language];
