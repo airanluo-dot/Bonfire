@@ -20,6 +20,10 @@ jobs:
           python3 tests/run.py
           sh macos/build.sh "$RUNNER_TEMP/build"
           sh macos/package.sh "$RUNNER_TEMP/build/Bonfire.app" dist
+          mkdir "$RUNNER_TEMP/update-test"
+          ditto "$RUNNER_TEMP/build/Bonfire.app" "$RUNNER_TEMP/update-test/Bonfire.app"
+          xcrun clang++ -std=c++17 -fobjc-arc tests/mac_update.mm macos/BundleUpdate.mm -framework Foundation -o "$RUNNER_TEMP/update-test/check"
+          "$RUNNER_TEMP/update-test/check" "$(pwd)"/dist/*-Portable.zip "$RUNNER_TEMP/update-test/Bonfire.app" "$(cat VERSION)"
       - name: Install and launch the shipped Mac application
         run: |
           sudo installer -pkg dist/*-Installer.pkg -target /

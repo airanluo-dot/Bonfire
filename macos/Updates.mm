@@ -1,4 +1,5 @@
 #import "Updates.h"
+#import "BundleUpdate.h"
 #import <CommonCrypto/CommonDigest.h>
 #import <sys/stdio.h>
 #include "../app/runtime.hpp"
@@ -18,11 +19,6 @@ NSDictionary *object(const Json& value){
     return [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
 }
 void require(BOOL value,const char* key){if(!value)throw Error(key);}
-void tool(NSString *command,NSArray<NSString*> *args){
-    NSTask *task=[NSTask new];task.executableURL=[NSURL fileURLWithPath:command];task.arguments=args;
-    task.standardOutput=NSFileHandle.fileHandleWithNullDevice;task.standardError=NSFileHandle.fileHandleWithNullDevice;
-    require([task launchAndReturnError:nil],"UpdateFailed");[task waitUntilExit];require(task.terminationStatus==0,"UpdateIntegrity");
-}
 BOOL matches(NSURL *file,NSDictionary *candidate){
     NSDictionary *attributes=[NSFileManager.defaultManager attributesOfItemAtPath:file.path error:nil];
     if(![attributes[NSFileType] isEqual:NSFileTypeRegular] || [attributes[NSFileSize] unsignedLongLongValue]!=[candidate[@"size"] unsignedLongLongValue])return NO;
@@ -147,18 +143,7 @@ BOOL matches(NSURL *file,NSDictionary *candidate){
     _installing=YES;[self emit:@"UpdateInstalling"];
     [self perform:^id(Cancellation stop){
         require(matches(archive,plan),"UpdateIntegrity");
-        NSURL *stage=[current.URLByDeletingLastPathComponent URLByAppendingPathComponent:[@".bonfire-update-" stringByAppendingString:NSUUID.UUID.UUIDString]];
-        require([fm createDirectoryAtURL:stage withIntermediateDirectories:NO attributes:nil error:nil],"UpdateManualMac");
-        @try{
-            tool(@"/usr/bin/ditto",@[@"-x",@"-k",archive.path,stage.path]);
-            NSURL *fresh=[stage URLByAppendingPathComponent:@"Bonfire.app"];
-            NSDictionary *info=[NSDictionary dictionaryWithContentsOfURL:[fresh URLByAppendingPathComponent:@"Contents/Info.plist"]];
-            require([info[@"CFBundleIdentifier"] isEqual:@"app.bonfire.savetransfer"] && [info[@"BonfireVersion"] isEqual:plan[@"version"]],"UpdateIntegrity");
-            tool(@"/usr/bin/codesign",@[@"--verify",@"--strict",fresh.path]);
-            // The destination and replacement must be on the same volume. Swap is atomic.
-            require(renamex_np(current.fileSystemRepresentation,fresh.fileSystemRepresentation,RENAME_SWAP)==0,"UpdateManualMac");
-            [fm removeItemAtURL:stage error:nil];return @YES;
-        }@finally{[fm removeItemAtURL:stage error:nil];}
+        BFReplaceApplication(archive,current,plan[@"version"]);return @YES;
     } finish:^(id result){
         self->_installing=NO;
         if(!result){[self emit:@"UpdateFailed"];return;}
