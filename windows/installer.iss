@@ -83,8 +83,8 @@ end;
 procedure CurPageChanged(CurPageID: Integer);
 begin
   if (CurPageID = wpReady) and (InstalledVersion <> '') then
-    WizardForm.ReadyMemo.Lines.Insert(0, FmtMessage(CustomMessage('VersionChange'),
-      [InstalledVersion, '{#ReleaseVersion}']) + #13#10);
+    WizardForm.ReadyMemo.Lines.Insert(0,
+      FmtMessage(CustomMessage('VersionChange'), [InstalledVersion, '{#ReleaseVersion}']) + #13#10);
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
