@@ -44,6 +44,11 @@ internal sealed class Preferences {
     public string Folder { get; set; } = "";
     public HashSet<string> Hidden { get; set; } = [];
     public List<string> PackageFolders { get; set; } = [];
+    public bool AutoCheck { get; set; } = true;
+    public bool AutoDownload { get; set; } = true;
+    public bool AutoInstall { get; set; }
+    public string Channel { get; set; } = ReleaseUpdates.Version.Contains('-') ? "Beta" : "Stable";
+    public DateTimeOffset? LastCheck { get; set; }
     [System.Text.Json.Serialization.JsonIgnore]
     public string Destination => string.IsNullOrWhiteSpace(Folder) ? Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory) : Folder;
     public static Preferences Load() {

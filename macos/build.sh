@@ -13,7 +13,7 @@ for id in $(sed -n 's/^BONFIRE_GAME(\([a-z0-9_]*\)).*/\1/p' "$src/adapters/catal
 done
 xcrun clang -arch arm64 -mmacosx-version-min=13.0 -O2 -c "$src/vendor/puff.c" -o "$dst/puff.o"
 xcrun clang++ -std=c++17 -arch arm64 -mmacosx-version-min=13.0 -fobjc-arc -fblocks -O2 \
-  "$@" "$src/app/runtime.cpp" "$src/macos/platform.mm" "$src/macos/Presentation.mm" "$src/macos/App.mm" "$dst/puff.o" \
+  "$@" "$src/app/"*.cpp "$src/macos/"*.mm "$dst/puff.o" \
   -framework AppKit -framework CoreServices -framework CoreFoundation -framework UniformTypeIdentifiers -framework Foundation \
   -o "$app/Contents/MacOS/Bonfire"
 codesign --force --sign - "$app"

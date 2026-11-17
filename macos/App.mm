@@ -1,4 +1,5 @@
 #import "Presentation.h"
+#import "Updates.h"
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #include <atomic>
 #include <memory>
@@ -44,6 +45,8 @@ static NSDictionary *call(NSDictionary *input,Stop stop){
     BOOL _receiving,_writing;
     NSUInteger _previewGeneration;
     Stop _screen;
+    BFUpdates *_updates;
+    NSStackView *_updateGroup;
 }
 - (NSString*)t:(NSString*)key {return [_strings text:key arguments:@[]];}
 - (NSString*)format:(NSString*)key arg:(id)arg {return [_strings text:key arguments:@[arg]];}
@@ -63,6 +66,11 @@ static NSDictionary *call(NSDictionary *input,Stop stop){
     NSToolbar *toolbar=[[NSToolbar alloc] initWithIdentifier:@"BonfireMain"];toolbar.delegate=self;toolbar.displayMode=NSToolbarDisplayModeIconOnly;_window.toolbar=toolbar;
     [self buildSidebar:side.view];[self menu];[self enter:@"work"];
     [_window center];[_window makeKeyAndOrderFront:nil];[NSApp activateIgnoringOtherApps:YES];
+    _updates=[[BFUpdates alloc] initWithPreferences:_prefs];
+    __weak Bonfire *weakSelf=self;
+    _updates.changed=^{[weakSelf showUpdates];};
+    _updates.canInstall=^BOOL{Bonfire *owner=weakSelf;return owner && !owner->_writing;};
+    if(_prefs.autoCheck)[_updates check];
 }
 - (void)menu {
     NSMenu *bar=[NSMenu new];NSMenuItem *app=[NSMenuItem new];[bar addItem:app];
@@ -119,6 +127,7 @@ static NSDictionary *call(NSDictionary *input,Stop stop){
     [_navigation reloadData];[_window.toolbar validateVisibleItems];if(settings)[self settings];else [self library];
 }
 - (void)startPage:(NSString*)title {
+    _updateGroup=nil;
     NSView *view=_content.view;
     for(NSView *old in view.subviews.copy)[old removeFromSuperview];
     NSScrollView *scroll=[NSScrollView new];scroll.drawsBackground=NO;scroll.hasVerticalScroller=YES;scroll.autohidesScrollers=YES;
@@ -223,7 +232,7 @@ static NSDictionary *call(NSDictionary *input,Stop stop){
     [self perform:@{@"op":@"preview",@"path":path} done:^(NSDictionary *p){if(p && generation==self->_previewGeneration){self->_preview=p[@"progress"];self->_checksum=p[@"checksum"];[self workspace:@""];}}];
 }
 - (void)transfer {
-    if(_writing)return;
+    if(_writing||_updates.installing)return;
     _writing=YES;
     NSHashTable<NSControl*> *enabled=[NSHashTable weakObjectsHashTable];
     NSMutableArray<NSView*> *views=[NSMutableArray arrayWithObject:_split.view];
@@ -281,6 +290,7 @@ static NSDictionary *call(NSDictionary *input,Stop stop){
         NSButton *check=[NSButton checkboxWithTitle:[self name:game] target:self action:@selector(toggleGame:)];
         check.identifier=game[@"id"];check.state=[_prefs.hidden containsObject:game[@"id"]]?NSControlStateValueOff:NSControlStateValueOn;[visible addArrangedSubview:check];
     }
+    _updateGroup=[self group:@"Updates"];[self showUpdates];
 }
 - (void)toggleGame:(NSButton*)sender {
     if(sender.state==NSControlStateValueOn)[_prefs.hidden removeObject:sender.identifier];else [_prefs.hidden addObject:sender.identifier];[_prefs save];
@@ -288,8 +298,50 @@ static NSDictionary *call(NSDictionary *input,Stop stop){
 - (void)setLanguage:(NSPopUpButton*)sender{
     _prefs.language=@[@"system",@"zh-Hans",@"en"][sender.indexOfSelectedItem];[_prefs save];[_strings setLanguage:_prefs.language];[self menu];[self enter:@"settings"];
 }
-- (BOOL)windowShouldClose:(NSWindow*)w{return !_writing;}
-- (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication*)app{return _writing?NSTerminateCancel:NSTerminateNow;}
+- (void)showUpdates {
+    if(![_section isEqual:@"settings"]||!_updateGroup)return;
+    for(NSView *view in _updateGroup.arrangedSubviews.copy)[view removeFromSuperview];
+    [_updateGroup addArrangedSubview:BFLabel([self t:@"Updates"],14,NSFontWeightSemibold)];
+    NSArray *keys=@[@"UpdateAutoCheck",@"UpdateAutoDownload",@"UpdateAutoInstall"];
+    NSArray *properties=@[@"autoCheck",@"autoDownload",@"autoInstall"];
+    for(NSUInteger i=0;i<keys.count;++i){
+        NSButton *toggle=[NSButton checkboxWithTitle:[self t:keys[i]] target:self action:@selector(updateToggle:)];
+        toggle.identifier=properties[i];toggle.state=[[_prefs valueForKey:properties[i]] boolValue]?NSControlStateValueOn:NSControlStateValueOff;
+        [_updateGroup addArrangedSubview:toggle];
+    }
+    [_updateGroup addArrangedSubview:BFLabel([self t:@"UpdateChannel"],13,NSFontWeightMedium)];
+    NSPopUpButton *channel=[NSPopUpButton new];[channel addItemsWithTitles:@[[self t:@"Stable"],[self t:@"Beta"]]];
+    [channel selectItemAtIndex:[_prefs.channel isEqual:@"Beta"]?1:0];channel.target=self;channel.action=@selector(updateChannel:);
+    channel.enabled=!_updates.installing;[_updateGroup addArrangedSubview:channel];
+    [_updateGroup addArrangedSubview:BFLabel([self t:@"UpdateChannelsHelp"],13,NSFontWeightRegular)];
+    NSString *mode=[self t:_updates.installed?@"Installed":@"Portable"];
+    [_updateGroup addArrangedSubview:BFLabel([_strings text:@"UpdateBuild" arguments:@[BFUpdates.version,mode]],13,NSFontWeightMedium)];
+    NSString *status=[_updates.status isEqual:@"UpdateAvailable"]?[self format:@"UpdateAvailable" arg:_updates.candidate[@"version"]]:[self t:_updates.status];
+    [_updateGroup addArrangedSubview:BFLabel(status,13,NSFontWeightRegular)];
+    if(_prefs.lastCheck){
+        NSDateFormatter *date=[NSDateFormatter new];date.locale=_strings.locale;date.dateStyle=NSDateFormatterShortStyle;date.timeStyle=NSDateFormatterShortStyle;
+        [_updateGroup addArrangedSubview:BFLabel([self format:@"UpdateLast" arg:[date stringFromDate:_prefs.lastCheck]],12,NSFontWeightRegular)];
+    }
+    NSStackView *buttons=BFStack(NSUserInterfaceLayoutOrientationHorizontal,8);[_updateGroup addArrangedSubview:buttons];
+    NSButton *check=BFButton([self t:@"UpdateCheck"],^{[self->_updates check];});check.enabled=!_updates.busy;[buttons addArrangedSubview:check];
+    if(!_updates.busy&&_updates.candidate){
+        if(!_updates.download)[buttons addArrangedSubview:BFButton([self t:@"UpdateDownload"],^{[self->_updates downloadUpdate];})];
+        else{
+            [buttons addArrangedSubview:BFButton([self t:@"UpdateInstall"],^{[self->_updates install];})];
+            [buttons addArrangedSubview:BFButton([self t:@"UpdateShow"],^{[self->_updates reveal];})];
+        }
+    }
+}
+- (void)updateToggle:(NSButton*)sender {
+    [_prefs setValue:@(sender.state==NSControlStateValueOn) forKey:sender.identifier];[_prefs save];
+}
+- (void)updateChannel:(NSPopUpButton*)sender {
+    _prefs.channel=sender.indexOfSelectedItem==1?@"Beta":@"Stable";[_prefs save];[_updates cancel];if(_prefs.autoCheck)[_updates check];
+}
+
+
+- (BOOL)windowShouldClose:(NSWindow*)w{return !_writing&&!_updates.installing;}
+- (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication*)app{return (_writing||_updates.installing)?NSTerminateCancel:NSTerminateNow;}
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication*)app{return YES;}
 @end
 int main(){@autoreleasepool{NSApplication *app=NSApplication.sharedApplication;[app setActivationPolicy:NSApplicationActivationPolicyRegular];Bonfire *delegate=[Bonfire new];app.delegate=delegate;[app run];}return 0;}

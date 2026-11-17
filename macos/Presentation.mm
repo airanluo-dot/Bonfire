@@ -29,6 +29,12 @@
         _language=d[@"language"] ?: @"system"; _folder=d[@"folder"] ?: @"";
         _hidden=[NSMutableSet setWithArray:d[@"hidden"] ?: @[]];
         _folders=[NSMutableOrderedSet orderedSetWithArray:d[@"folders"] ?: @[]];
+        _autoCheck=d[@"autoCheck"]?[d[@"autoCheck"] boolValue]:YES;
+        _autoDownload=d[@"autoDownload"]?[d[@"autoDownload"] boolValue]:YES;
+        _autoInstall=[d[@"autoInstall"] boolValue];
+        NSString *version=[NSBundle.mainBundle objectForInfoDictionaryKey:@"BonfireVersion"];
+        _channel=d[@"channel"]?:([version containsString:@"-"]?@"Beta":@"Stable");
+        _lastCheck=d[@"lastCheck"];
     }
     return self;
 }
@@ -36,7 +42,10 @@
     return _folder.length?_folder:[NSFileManager.defaultManager URLsForDirectory:NSDesktopDirectory inDomains:NSUserDomainMask].firstObject.path;
 }
 - (void)save {
-    [NSUserDefaults.standardUserDefaults setObject:@{@"language":_language,@"folder":_folder,@"hidden":_hidden.allObjects,@"folders":_folders.array} forKey:@"Preferences"];
+    NSMutableDictionary *d=[@{@"language":_language,@"folder":_folder,@"hidden":_hidden.allObjects,@"folders":_folders.array,
+        @"autoCheck":@(_autoCheck),@"autoDownload":@(_autoDownload),@"autoInstall":@(_autoInstall),@"channel":_channel} mutableCopy];
+    if(_lastCheck)d[@"lastCheck"]=_lastCheck;
+    [NSUserDefaults.standardUserDefaults setObject:d forKey:@"Preferences"];
 }
 @end
 

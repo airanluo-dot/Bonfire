@@ -32,13 +32,16 @@ public sealed partial class MainWindow : Window {
         AppWindow.Resize(new Windows.Graphics.SizeInt32(1080,760));
         AppWindow.Closing += (_, e) => e.Cancel = writing;
         games = Native.Call(new { op="catalog" }).AsArray();
+        updates=new(prefs,()=>!writing,Close);
+        updates.Changed+=ShowUpdateControls;
         Nav.ItemInvoked += (_,e) => {
             if (!writing && e.InvokedItemContainer is NavigationViewItem item) Enter((string)item.Tag);
         };
-        Closed += (_,_) => screen.Cancel();
+        Closed += (_,_) => {screen.Cancel();updates.Reset();};
         Root.Language = strings.Culture.Name;
         Nav.SelectedItem = WorkNav;
         Enter("work");
+        if(prefs.AutoCheck)DispatcherQueue.TryEnqueue(async()=>await updates.Check());
     }
 
     void Restart() { screen.Cancel(); screen.Dispose(); screen = new(); }
@@ -46,6 +49,7 @@ public sealed partial class MainWindow : Window {
         Restart();
         Root.Language=strings.Culture.Name;
         section=target; game=""; selected=null; inventory=null; preview=null; package=""; digest=""; receiving=false;
+        updateGroup=null;
         destination=prefs.Destination; installs=[];
         WorkNav.Content=T("Workbench"); ManagerNav.Content=T("Manager"); SettingsNav.Content=T("Settings");
         foreach(var item in new[]{WorkNav,ManagerNav,SettingsNav}) {
@@ -232,6 +236,6 @@ public sealed partial class MainWindow : Window {
         var visible=Group(page,T("VisibleGames"));
         foreach(var entry in games){var id=entry!["id"]!.ToString();var box=new CheckBox{Content=GameName(id),IsChecked=!prefs.Hidden.Contains(id)};
             box.Click+=(_,_)=>{if(box.IsChecked==true)prefs.Hidden.Remove(id);else prefs.Hidden.Add(id);SaveSettings();};visible.Children.Add(box);}
-        page.Children.Add(status);Body(page);
+        updateGroup=Group(page,T("Updates"));ShowUpdateControls();page.Children.Add(status);Body(page);
     }
 }

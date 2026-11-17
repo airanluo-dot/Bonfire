@@ -12,6 +12,9 @@
 @property(nonatomic,readonly) NSString *destination;
 @property(nonatomic,readonly) NSMutableSet<NSString*> *hidden;
 @property(nonatomic,readonly) NSMutableOrderedSet<NSString*> *folders;
+@property(nonatomic) BOOL autoCheck,autoDownload,autoInstall;
+@property(nonatomic,copy) NSString *channel;
+@property(nonatomic,strong) NSDate *lastCheck;
 - (void)save;
 @end
 

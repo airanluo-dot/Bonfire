@@ -1,4 +1,5 @@
 #include "runtime.hpp"
+#include "updates.hpp"
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
@@ -65,6 +66,8 @@ static Json timeline(const GameAdapter& game,const Json& folders,const std::atom
 }
 Json request(const Json& in,const std::atomic_bool& stop) {
     auto op=in.at("op").get<std::string>();
+    if(op=="updateFeed")return "https://api.github.com/repos/airanluo-dot/Bonfire/releases";
+    if(op=="selectUpdate")return selectUpdate(in);
     if(op=="catalog") {
         Json list=Json::array();
         for(auto game:catalog()) list.push_back({{"id",game->info.id},{"ext",game->info.extension}});

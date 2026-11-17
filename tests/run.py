@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def build_tests(work):
-    sources = [ROOT / "tests/roundtrip.cpp", ROOT / "adapters/catalog.cpp", ROOT / "app/runtime.cpp"]
+    sources = [ROOT / "tests/roundtrip.cpp", ROOT / "adapters/catalog.cpp", *sorted((ROOT / "app").glob("*.cpp"))]
     sources.extend(sorted((ROOT / "core").glob("*.cpp")))
     for line in (ROOT / "adapters/catalog.def").read_text().splitlines():
         game_id = re.fullmatch(r"BONFIRE_GAME\(([a-z][a-z0-9_]*)\)", line)[1]
@@ -60,3 +60,5 @@ if __name__ == "__main__":
         subprocess.run([executable, game, destination], check=True)
         from timeline import check
         check(executable, game, work)
+        from updates import check as check_updates
+        check_updates(executable)

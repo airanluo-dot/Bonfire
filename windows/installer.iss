@@ -33,10 +33,22 @@ RestartApplications=no
 
 [Languages]
 Name: "en"; MessagesFile: "compiler:Default.isl"
-Name: "zh"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+Name: "zh"; MessagesFile: "localization\ChineseSimplified.isl"
 
 [Files]
 Source: "{#PublishDir}\*"; DestDir: "{app}"; Excludes: "*.pdb"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\Bonfire"; Filename: "{app}\Bonfire.exe"
+
+[Run]
+Filename: "{app}\Bonfire.exe"; Flags: nowait; Check: RestartUpdatedApp
+
+[Code]
+function RestartUpdatedApp(): Boolean;
+var I: Integer;
+begin
+  Result := False;
+  for I := 1 to ParamCount do
+    if CompareText(ParamStr(I), '/BONFIRERESTART') = 0 then Result := True;
+end;

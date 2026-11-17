@@ -9,7 +9,7 @@ if errorlevel 1 (
 if /i not "%VSCMD_ARG_TGT_ARCH%"=="x64" exit /b 1
 pushd "%dst%"
 (for /f "usebackq tokens=2 delims=()" %%G in ("%~dp0..\adapters\catalog.def") do echo "%~dp0..\adapters\%%G\%%G.cpp") >games.rsp
-cl /nologo /std:c++17 /O2 /MT /EHsc /utf-8 /DUNICODE /D_UNICODE /DNDEBUG /LD "%~dp0platform.cpp" "%~dp0..\core\*.cpp" "%~dp0..\adapters\catalog.cpp" @games.rsp "%~dp0..\app\runtime.cpp" "%~dp0..\vendor\puff.c" /Fe:BonfireCore.dll /link shell32.lib ole32.lib uuid.lib bcrypt.lib user32.lib
+cl /nologo /std:c++17 /O2 /MT /EHsc /utf-8 /DUNICODE /D_UNICODE /DNDEBUG /LD "%~dp0platform.cpp" "%~dp0..\core\*.cpp" "%~dp0..\adapters\catalog.cpp" @games.rsp "%~dp0..\app\*.cpp" "%~dp0..\vendor\puff.c" /Fe:BonfireCore.dll /link shell32.lib ole32.lib uuid.lib bcrypt.lib user32.lib
 if errorlevel 1 exit /b 1
 where py.exe >nul 2>&1
 if errorlevel 1 (set "python=python") else (set "python=py -3")
