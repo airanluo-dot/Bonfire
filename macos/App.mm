@@ -252,6 +252,7 @@ static NSDictionary *call(NSDictionary *input,Stop stop){
         NSString *success=self->_receiving?[self t:@"Imported"]:[self format:@"Exported" arg:result];
         if(self->_receiving)[self perform:@{@"op":@"inventory",@"root":self->_install[@"root"]} done:^(id p){if(p){self->_inventory=p;[self workspace:success];}}];
         [self workspace:success];
+        [self->_updates applyAutomaticIfReady];
     }];
 }
 - (void)timeline:(NSString*)folder {
@@ -334,7 +335,7 @@ static NSDictionary *call(NSDictionary *input,Stop stop){
     }
 }
 - (void)updateToggle:(NSButton*)sender {
-    [_prefs setValue:@(sender.state==NSControlStateValueOn) forKey:sender.identifier];[_prefs save];
+    [_prefs setValue:@(sender.state==NSControlStateValueOn) forKey:sender.identifier];[_prefs save];[_updates applyAutomaticIfReady];
 }
 - (void)updateChannel:(NSPopUpButton*)sender {
     _prefs.channel=sender.indexOfSelectedItem==1?@"Beta":@"Stable";[_prefs save];[_updates cancel];if(_prefs.autoCheck)[_updates check];

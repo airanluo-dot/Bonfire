@@ -153,5 +153,8 @@ BOOL matches(NSURL *file,NSDictionary *candidate){
         }];
     }];
 }
+- (void)applyAutomaticIfReady{
+    if(_prefs.autoInstall && _download && !_busy && (!_canInstall||_canInstall()))[self install];
+}
 - (void)reveal{if(_download)[NSWorkspace.sharedWorkspace activateFileViewerSelectingURLs:@[_download]];}
 @end

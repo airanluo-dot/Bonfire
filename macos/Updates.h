@@ -13,6 +13,7 @@
 - (void)check;
 - (void)downloadUpdate;
 - (void)install;
+- (void)applyAutomaticIfReady;
 - (void)reveal;
 - (void)cancel;
 @end

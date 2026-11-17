@@ -116,6 +116,7 @@ internal sealed class ReleaseUpdates(Preferences prefs, Func<bool> canInstall, A
         }finally{if(File.Exists(partial))File.Delete(partial);}
     }
     public Task Install()=>Execute(InstallCore);
+    public Task ApplyAutomaticIfReady()=>prefs.AutoInstall && Installed && LocalFile!=null && !Busy && canInstall() ? Install() : Task.CompletedTask;
     async Task InstallCore(CancellationToken token){
         if(Candidate==null||LocalFile==null)return;
         if(!Installed){Reveal();return;}

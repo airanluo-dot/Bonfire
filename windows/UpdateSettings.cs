@@ -15,7 +15,7 @@ public sealed partial class MainWindow {
         }
         Toggle("UpdateAutoCheck",prefs.AutoCheck,b=>prefs.AutoCheck=b);
         Toggle("UpdateAutoDownload",prefs.AutoDownload,b=>prefs.AutoDownload=b);
-        Toggle("UpdateAutoInstall",prefs.AutoInstall,b=>prefs.AutoInstall=b,updates.Installed);
+        Toggle("UpdateAutoInstall",prefs.AutoInstall,b=>{prefs.AutoInstall=b;_ = updates.ApplyAutomaticIfReady();},updates.Installed);
         var channel=new ComboBox{Header=T("UpdateChannel")};channel.Items.Add(T("Stable"));channel.Items.Add(T("Beta"));
         channel.SelectedIndex=prefs.Channel=="Beta"?1:0;
         channel.SelectionChanged+=(_,_)=>{

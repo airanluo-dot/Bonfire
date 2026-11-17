@@ -201,7 +201,7 @@ public sealed partial class MainWindow : Window {
             if(receiving) {inventory=await Run(new {op="inventory",game,root},screen.Token);}
             try{prefs.Remember(folder);}catch(Exception e){success+="\n"+ErrorText(e);}
             Workspace(success);
-        }finally{writing=false;Nav.IsEnabled=true;}
+        }finally{writing=false;Nav.IsEnabled=true;_ = updates.ApplyAutomaticIfReady();}
     }
     async void Timeline(string? single=null) {
         Restart();var token=screen.Token;
