@@ -13,8 +13,13 @@ stage="$(mktemp -d)"
 trap 'rm -rf "$stage"' EXIT
 mkdir "$stage/root"
 ditto "$app" "$stage/root/Bonfire.app"
-pkgbuild --analyze --root "$stage/root" "$stage/components.plist"
-/usr/libexec/PlistBuddy -c 'Set :0:BundleIsRelocatable false' "$stage/components.plist"
+python3 - "$stage/components.plist" <<'PY'
+import plistlib, sys
+with open(sys.argv[1], "wb") as stream:
+    plistlib.dump([dict(RootRelativeBundlePath="Bonfire.app", BundleIsRelocatable=False,
+                        BundleIsVersionChecked=True, BundleHasStrictIdentifier=True,
+                        BundleOverwriteAction="upgrade")], stream)
+PY
 pkgbuild --root "$stage/root" --component-plist "$stage/components.plist" \
     --install-location /Applications --identifier app.bonfire.savetransfer.installer \
     --version "$(printf '%s' "$version" | sed 's/-beta\././')" "$dst/$name-Installer.pkg"
