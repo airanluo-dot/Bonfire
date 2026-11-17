@@ -2,7 +2,7 @@
 
 Bonfire 是原生 Windows 和 Mac 单机游戏存档传送工具。当前适配《兽劳动》（Jurodo）。Windows x64 和 Apple Silicon 共用同一种 `.jurosave` 存档包。
 
-首个预发布版本为 **0.1.0 Beta 1**。在 [Releases](https://github.com/airanluo-dot/Bonfire/releases) 可下载 Windows x64 便携 ZIP、当前用户安装 EXE，以及 Mac arm64 便携 ZIP 和安装到“应用程序”的 PKG。
+当前预发布版本为 **0.1.0 Beta 2**。在 [Releases](https://github.com/airanluo-dot/Bonfire/releases) 可下载 Windows x64 便携 ZIP、当前用户安装 EXE，以及 Mac arm64 便携 ZIP 和安装到“应用程序”的 PKG。
 
 ## 使用
 
@@ -52,7 +52,7 @@ Bonfire 使用 Windows 当前用户注册表或 macOS 用户偏好保存配置�
 
 第三方代码许可见 `vendor/NOTICES.txt`。《兽劳动》图标来自游戏安装包。
 
-应用品牌占位图位于 `branding/AppIcon.icns`。常规构建复制 Mac 图标，并从同一文件里的多分辨率 PNG 生成 Windows 应用与安装器的 ICO。更换品牌图时替换这一份资源即可，游戏图标单独存放。
+Bonfire 的 Logo 以 `branding/Bonfire.svg` 为唯一设计基准。更新 Logo 时，从这份矢量原稿导出并同步替换 `branding/app.ico` 和 `branding/AppIcon.icns`。Windows 应用、安装器和快捷方式共用 ICO，macOS 应用使用 ICNS。构建时直接复制对应平台的图标，保留全部尺寸和透明通道。
 
 版本号来自 `VERSION`。Windows 使用 Inno Setup 6.7.4 和 `windows/package.ps1`，Mac 使用 `sh macos/package.sh <Bonfire.app> <输出目录>`。构建工作流会在 Windows x64 和 macOS 27 Apple Silicon 上执行存档测试，并安装生成的包进行核对。
 

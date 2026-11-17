@@ -80,6 +80,26 @@ jobs:
             if ((Get-FileHash "$dest/$file").Hash -ne (Get-FileHash "$unpacked/$file").Hash) { throw "Mismatch in $file" }
           }
           ./tests/windows_startup.ps1 -Application "$dest/Bonfire.exe"
+          $desktopLink = Join-Path ([Environment]::GetFolderPath('DesktopDirectory')) 'Bonfire.lnk'
+          $menuLink = Join-Path ([Environment]::GetFolderPath('Programs')) 'Bonfire/Bonfire.lnk'
+          $shell = New-Object -ComObject WScript.Shell
+          foreach ($link in $desktopLink, $menuLink) {
+            if ($shell.CreateShortcut($link).TargetPath -ne (Join-Path $dest 'Bonfire.exe')) {
+              throw "Missing or incorrect shortcut at $link"
+            }
+          }
+          $silent = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART')
+          foreach ($taskOptions in '/MERGETASKS=!desktopicon', '') {
+            $arguments = if ($taskOptions) { $silent + $taskOptions } else { $silent }
+            $process = Start-Process $installer -ArgumentList $arguments -Wait -PassThru
+            if ($process.ExitCode -or (Test-Path -LiteralPath $desktopLink)) {
+              throw 'Reinstallation did not respect the desktop shortcut selection'
+            }
+          }
+          $process = Start-Process "$dest/unins000.exe" -ArgumentList $silent -Wait -PassThru
+          if ($process.ExitCode -or (Test-Path -LiteralPath $menuLink) -or (Test-Path "$dest/Bonfire.exe")) {
+            throw 'Uninstallation did not remove Bonfire and its Start menu shortcut'
+          }
       - uses: actions/upload-artifact@v4
         if: always()
         with:

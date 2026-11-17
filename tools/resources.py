@@ -7,7 +7,6 @@ import shutil
 from pathlib import Path
 from string import Formatter
 from xml.etree import ElementTree as ET
-from branding import build_icon
 
 ROOT = Path(__file__).resolve().parents[1]
 LANGUAGES = ("en", "zh-Hans")
@@ -74,7 +73,8 @@ def generate(destination, platform):
     tables = catalogs(games)
     icons = destination / ("Assets/Games" if platform == "windows" else "Games")
     icons.mkdir(parents=True, exist_ok=True)
-    build_icon(ROOT / "branding", destination, platform)
+    app_icon = "app.ico" if platform == "windows" else "AppIcon.icns"
+    shutil.copyfile(ROOT / "branding" / app_icon, destination / app_icon)
     for game in games:
         shutil.copyfile(ROOT / "adapters" / game / "icon.png", icons / (game + ".png"))
     for lang, table in tables.items():
