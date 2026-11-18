@@ -62,3 +62,9 @@ if __name__ == "__main__":
         check(executable, game, work)
         from updates import check as check_updates
         check_updates(executable)
+        from renpy import check as check_renpy
+        check_renpy(executable, work)
+        from renpy_format import check as check_renpy_format
+        check_renpy_format(executable, work)
+        from nekojishi import check as check_nekojishi
+        check_nekojishi(executable, work)

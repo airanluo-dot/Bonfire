@@ -1,8 +1,6 @@
 #include "../../core/save_files.hpp"
+#include "../../core/inflate.hpp"
 #include "../../vendor/json.hpp"
-extern "C" {
-#include "../../vendor/puff.h"
-}
 #include <algorithm>
 #include <fstream>
 #include <set>
@@ -95,7 +93,7 @@ static Json decodeSave(const Bytes& bytes) {
     Bytes plain(64*1024);
     while (true) {
         unsigned long len=static_cast<unsigned long>(plain.size()), in=static_cast<unsigned long>(z.size()-6);
-        int result=puff(plain.data(),&len,z.data()+2,&in);
+        int result=inflateRaw(plain.data(),&len,z.data()+2,&in);
         if (result==0) { if (in!=z.size()-6) invalid(); plain.resize(len); break; }
         if (result!=1 || plain.size()>=32*MiB) invalid();
         plain.resize(plain.size()*2);

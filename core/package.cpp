@@ -33,6 +33,7 @@ static Digest digest(const Bytes& b, size_t n) {
 
 static void put(Bytes& b, uint32_t v) { for(int i=0;i<4;i++){ b.push_back(static_cast<unsigned char>(v)); v>>=8; } }
 Bytes encodePackage(const GameAdapter& game,const Files& f) {
+    auto limits=game.limits();
     Bytes b=signature(game);
     if (f.empty() || f.size()>countLimit) throw Error("InvalidCount");
     size_t total=0;
@@ -41,7 +42,7 @@ Bytes encodePackage(const GameAdapter& game,const Files& f) {
     for(unsigned i=0;i<8;++i) b.push_back(static_cast<unsigned char>(uint64_t(now)>>(8*i)));
     put(b,static_cast<uint32_t>(f.size()));
     for(const auto& [name,data]:f) {
-        if (!portableEntry(name) || !game.acceptsEntry(name) || data.size()>fileLimit || (total+=data.size())>totalLimit)
+        if (!portableEntry(name) || !game.acceptsEntry(name) || data.size()>limits.fileBytes || (total+=data.size())>limits.totalBytes)
             throw Error("BadAdapter");
         put(b,static_cast<uint32_t>(name.size())); put(b,static_cast<uint32_t>(data.size()));
         b.insert(b.end(),name.begin(),name.end()); b.insert(b.end(),data.begin(),data.end());
@@ -51,7 +52,8 @@ Bytes encodePackage(const GameAdapter& game,const Files& f) {
     return b;
 }
 Package readPackage(const GameAdapter& game,const Path& p) {
-    auto b=readBounded(p,totalLimit+countLimit*136+56);
+    auto limits=game.limits();
+    auto b=readBounded(p,limits.totalBytes+countLimit*136+56);
     auto header=signature(game);
     if (b.size()<48 || !std::equal(header.begin(),header.begin()+8,b.begin()) ||
         (b[8]!=1 && b[8]!=2) || b[9] || b[10] || b[11])
@@ -76,7 +78,7 @@ Package readPackage(const GameAdapter& game,const Path& p) {
     size_t total=0;
     for(unsigned i=0;i<count;++i) {
         auto nl=take(),len=take();
-        if(nl>128 || nl>end-pos || len>fileLimit || len>end-pos-nl || (total+=len)>totalLimit)
+        if(nl>128 || nl>end-pos || len>limits.fileBytes || len>end-pos-nl || (total+=len)>limits.totalBytes)
             throw Error("BadLength");
         std::string name(b.begin()+pos,b.begin()+pos+nl); pos+=nl;
         if(!portableEntry(name) || !game.acceptsEntry(name) || result.files.count(name)) throw Error("BadName");

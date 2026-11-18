@@ -22,6 +22,8 @@ struct Progress {
     size_t count=0;
     std::string playtime;
     size_t slot=0;
+    bool persistent=false;
+    std::string slotName;
 };
 
 struct GameInfo {
@@ -30,6 +32,10 @@ struct GameInfo {
     std::string windowsExe, windowsLock;
     std::vector<std::string> folderNames, macAppNames, macBundleIds;
 };
+struct SaveLimits {
+    size_t fileBytes=16*1024*1024;
+    size_t totalBytes=64*1024*1024;
+};
 
 // One immutable instance per supported game. Discovery can call identify on a worker.
 class GameAdapter {
@@ -37,6 +43,10 @@ public:
     const GameInfo info;
     explicit GameAdapter(GameInfo metadata) : info(std::move(metadata)) {}
     virtual ~GameAdapter() = default;
+    virtual SaveLimits limits() const { return {}; }
+    virtual bool sharesUserSaves() const { return false; }
+    virtual std::string compatibilityNotice(const Path&, const Files&) const { return {}; }
+    virtual void checkCompatibility(const Path&, const Files&) const {}
     virtual Path identify(const Path& selection) const = 0;
     virtual Path installation(const Path& root) const = 0;
     virtual Path saveDirectory(const Path& root) const = 0;

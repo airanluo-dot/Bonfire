@@ -1,0 +1,13 @@
+{
+  "Game_nekojishi": "Nekojishi",
+  "Neko_ContentFormat": "The Nekojishi package has an invalid content manifest.",
+  "Neko_PackageAdult": "Saved scenes or rollback points use the adult patch.",
+  "Neko_PackageSunny": "Saved scenes or rollback points use the A Sunny Day expansion.",
+  "Neko_PackageBoth": "Saved scenes or rollback points use the adult patch and the A Sunny Day expansion.",
+  "Neko_NeedsAdult": "Saved scenes or rollback points require the adult patch. Install it in the destination game before replacing saves.",
+  "Neko_NeedsSunny": "Saved scenes or rollback points require the A Sunny Day expansion. Install it in the destination game before replacing saves.",
+  "Neko_NeedsBoth": "Saved scenes or rollback points require the adult patch and the A Sunny Day expansion. Install both in the destination game before replacing saves.",
+  "Neko_SourceAdult": "The source game had the adult patch. You can transfer these saves. Install the patch on this device to keep its settings and gallery content available.",
+  "Neko_SourceSunny": "The source game had the A Sunny Day expansion. You can transfer these saves. Install the expansion on this device to access its content.",
+  "Neko_SourceBoth": "The source game had the adult patch and the A Sunny Day expansion. You can transfer these saves. Install both on this device to access their content."
+}

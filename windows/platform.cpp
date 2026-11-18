@@ -31,6 +31,15 @@ void shortcuts(const Path& folder,std::vector<Path>& hints,int maxDepth,const Pa
         }
     }
 }
+static Path steamInstall() {
+    wchar_t value[32768]{};
+    DWORD bytes=sizeof(value);
+    if(RegGetValueW(HKEY_CURRENT_USER,L"Software\\Valve\\Steam",L"SteamPath",RRF_RT_REG_SZ,
+                    nullptr,value,&bytes)==ERROR_SUCCESS && value[0]) return Path(value);
+    auto programs=known(FOLDERID_ProgramFilesX86);
+    return programs.empty() ? Path{} : programs/L"Steam";
+}
+#pragma comment(lib, "advapi32.lib")
 std::vector<Path> transfer::locate(const GameAdapter& game,const std::atomic_bool& cancelScan) {
     auto hr=CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED);
     struct Apartment {HRESULT hr; ~Apartment(){if(SUCCEEDED(hr))CoUninitialize();}} apartment{hr};
@@ -38,6 +47,7 @@ std::vector<Path> transfer::locate(const GameAdapter& game,const std::atomic_boo
         std::vector<Path> hints,common,volumes;
         wchar_t exe[32768]{}; GetModuleFileNameW(nullptr,exe,32768);
         hints.push_back(Path(exe).parent_path());
+        addSteamHints(game,steamInstall(),hints,cancelScan);
         auto exeName=fs::u8path(game.info.windowsExe);
         shortcuts(known(FOLDERID_Desktop),hints,1,exeName,cancelScan);
         shortcuts(known(FOLDERID_PublicDesktop),hints,0,exeName,cancelScan);
@@ -66,14 +76,28 @@ bool transfer::gameIsRunning(const GameAdapter& game,const Path& root) {
     if(snap==INVALID_HANDLE_VALUE) throw Error("ProcessQuery");
     PROCESSENTRY32W p{};p.dwSize=sizeof p;bool running=false;
     auto exe=fs::u8path(game.info.windowsExe);
-    if(Process32FirstW(snap,&p)) do {
-        if(_wcsicmp(p.szExeFile,exe.c_str())) continue;
+    if(!Process32FirstW(snap,&p)) { CloseHandle(snap); throw Error("ProcessQuery"); }
+    do {
+        bool gameName=!_wcsicmp(p.szExeFile,exe.c_str());
+        bool python=game.sharesUserSaves() &&
+            (!_wcsicmp(p.szExeFile,L"pythonw.exe") || !_wcsicmp(p.szExeFile,L"python.exe"));
+        if(!gameName && !python) continue;
         HANDLE process=OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION,FALSE,p.th32ProcessID);
-        if(!process){running=true;break;}
+        if(!process){if(gameName){running=true;break;} continue;}
         wchar_t path[32768];DWORD length=32768;
+        bool queried=QueryFullProcessImageNameW(process,0,path,&length)!=0;
+        CloseHandle(process);
+        if(!queried){if(gameName){running=true;break;} continue;}
+        Path executable(path);
         std::error_code ec;
-        running=!QueryFullProcessImageNameW(process,0,path,&length) || fs::equivalent(game.installation(root)/exe,path,ec);
-        CloseHandle(process);if(running) break;
+        if(gameName && fs::equivalent(game.installation(root)/exe,executable,ec)) {running=true;break;}
+        if(!game.sharesUserSaves()) continue;
+        auto base=executable.parent_path();
+        // Ren'Py runs either the launcher or an interpreter from lib/<arch>.
+        if(!_wcsicmp(base.parent_path().filename().c_str(),L"lib")) base=base.parent_path().parent_path();
+        else if(python) continue;
+        auto identified=game.identify(base);
+        if(!identified.empty() && fs::equivalent(base,identified,ec)) {running=true;break;}
     } while(Process32NextW(snap,&p));
     CloseHandle(snap);return running;
 }

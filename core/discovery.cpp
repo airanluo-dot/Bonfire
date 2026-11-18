@@ -1,11 +1,48 @@
 #include "transfer.hpp"
 #include <algorithm>
+#include <fstream>
+#include <iomanip>
 #include <set>
+#include <sstream>
 #ifdef _WIN32
 #include <windows.h>
 #endif
 
 namespace transfer {
+void addSteamHints(const GameAdapter& game, const Path& steam, std::vector<Path>& hints,
+                  const std::atomic_bool& cancelled) {
+    if (steam.empty() || cancelled) return;
+    std::set<Path> libraries{steam};
+    const auto config = steam / "steamapps" / "libraryfolders.vdf";
+    std::error_code ec;
+    if (fs::file_size(config, ec) <= 4 * 1024 * 1024 && !ec) {
+        std::ifstream input(config);
+        std::string line;
+        while (!cancelled && std::getline(input, line)) {
+            // Steam writes one quoted key/value per line. Older clients used
+            // a numbered key for the library path in place of a "path" field.
+            std::istringstream pair(line);
+            std::string key, value;
+            if (!(pair >> std::quoted(key) >> std::quoted(value))) continue;
+            if (key != "path" && (key.empty() || key.find_first_not_of("0123456789") != std::string::npos)) continue;
+            try {
+                auto library = fs::u8path(value);
+                if (library.is_absolute()) libraries.insert(library.lexically_normal());
+            } catch (const fs::filesystem_error&) { /* Ignore invalid path encoding. */ }
+        }
+    }
+    for (const auto& library : libraries) {
+        if (cancelled) return;
+        for (const auto& folder : game.info.folderNames) {
+            auto gameFolder = library / "steamapps" / "common" / fs::u8path(folder);
+            hints.push_back(gameFolder);
+#ifndef _WIN32
+            for (const auto& app : game.info.macAppNames) hints.push_back(gameFolder / fs::u8path(app));
+#endif
+        }
+    }
+}
+
 static bool skip(const fs::directory_entry& entry) {
     std::error_code ec;
     if (entry.is_symlink(ec)) return true;

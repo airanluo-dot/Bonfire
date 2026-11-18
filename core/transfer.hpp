@@ -14,6 +14,8 @@ struct Package {
 std::vector<Path> discover(const GameAdapter&, const std::vector<Path>& hints,
                            const std::vector<Path>& common, const std::vector<Path>& volumes,
                            const std::atomic_bool& cancelled);
+void addSteamHints(const GameAdapter&, const Path& steam, std::vector<Path>& hints,
+                   const std::atomic_bool& cancelled);
 Package readPackage(const GameAdapter&, const Path& path);
 Path extract(const GameAdapter&, const Path& root, const Path& destination, const std::string& localizedName = {});
 void receive(const GameAdapter&, const Path& root, const Package& package);

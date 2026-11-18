@@ -84,7 +84,7 @@ bool portableEntry(const std::string& n) {
         return (c>='a' && c<='z') || (c>='A' && c<='Z') || (c>='0' && c<='9') || c=='_' || c=='-' || c=='.';
     });
 }
-Bytes readSaveFile(const Path& p) { return readBounded(p,fileLimit); }
+Bytes readSaveFile(const Path& p) { return readBounded(p,SaveLimits{}.fileBytes); }
 static void checkReal(const Path& p, bool directory) {
     auto st = fs::symlink_status(p);
     bool ok = directory ? fs::is_directory(st) : fs::is_regular_file(st);
@@ -104,24 +104,43 @@ std::vector<Path> members(const Path& dir,NameFilter filter) {
     }
     return paths;
 }
-Files snapshot(const Path& dir,NameFilter filter) {
+Files snapshot(const Path& dir,NameFilter filter,SaveLimits limits) {
     Files files;
     size_t total = 0;
     for (const auto& p : members(dir,filter)) {
-        auto b = readBounded(p,fileLimit);
+        auto b = readBounded(p,limits.fileBytes);
         total += b.size();
-        if (total>totalLimit || files.size()>=countLimit) throw Error("PackageLimit");
+        if (total>limits.totalBytes || files.size()>=countLimit) throw Error("PackageLimit");
         files.emplace(p.filename().u8string(),std::move(b));
     }
     return files;
 }
 void replaceFiles(const Path& dir,const Files& incoming,NameFilter filter,const std::string& lastFile) {
+    replaceMirrors({dir},incoming,filter,lastFile,{});
+}
+void replaceMirrors(const std::vector<Path>& dirs,const Files& incoming,NameFilter filter,const std::string& lastFile,SaveLimits limits) {
     for (const auto& entry : incoming)
         if (!portableEntry(entry.first) || !filter(entry.first)) throw Error("InvalidName");
-    auto before=snapshot(dir,filter);
-    bool made=fs::create_directory(dir); checkReal(dir,true);
-    std::vector<std::string> touched;
+    struct Destination {
+        Path dir;
+        Files before;
+        std::map<std::string,fs::file_time_type> times;
+        std::vector<std::string> touched;
+        bool made=false;
+    };
+    std::vector<Destination> copies;
+    for(const auto& dir:dirs) {
+        Destination copy{dir,snapshot(dir,filter,limits)};
+        for(const auto& [name,data]:copy.before) copy.times[name]=fs::last_write_time(dir/name);
+        copies.push_back(std::move(copy));
+    }
     try {
+      for(auto& copy:copies) {
+        const auto& dir=copy.dir;
+        const auto& before=copy.before;
+        auto& touched=copy.touched;
+        copy.made=fs::create_directory(dir);
+        checkReal(dir,true);
         auto install=[&](const std::string& name,const Bytes& data) {
             auto previous=before.find(name);
             if(previous==before.end()) {
@@ -138,17 +157,24 @@ void replaceFiles(const Path& dir,const Files& incoming,NameFilter filter,const 
         for(const auto& [n,b]:before) if(!incoming.count(n)) {
             if(fs::remove(dir/n)) touched.push_back(n);
         }
-        if(snapshot(dir,filter)!=incoming) throw Error("VerifyFailed");
+        if(snapshot(dir,filter,limits)!=incoming) throw Error("VerifyFailed");
+      }
     } catch(...) {
         bool ok=true;
-        for(auto it=touched.rbegin();it!=touched.rend();++it) try {
-            auto p=dir/ *it;
-            if(before.count(*it)) {
-                try { if(readBounded(p,fileLimit)==before.at(*it)) continue; } catch(...) {}
-                write(openFile(p,Access::replace),before.at(*it));
-            } else fs::remove(p);
-        } catch(...) { ok=false; }
-        if(made) {std::error_code ec; fs::remove(dir,ec);}
+        for(auto copy=copies.rbegin();copy!=copies.rend();++copy) {
+            for(auto it=copy->touched.rbegin();it!=copy->touched.rend();++it) try {
+                auto p=copy->dir/ *it;
+                if(copy->before.count(*it)) {
+                    const auto& original=copy->before.at(*it);
+                    bool intact=false;
+                    try { intact=readBounded(p,limits.fileBytes)==original; } catch(...) {}
+                    if(!intact) write(openFile(p,Access::replace),original);
+                    auto time=copy->times.at(*it);
+                    if(fs::last_write_time(p)!=time) fs::last_write_time(p,time);
+                } else fs::remove(p);
+            } catch(...) { ok=false; }
+            if(copy->made) {std::error_code ec; fs::remove(copy->dir,ec);}
+        }
         if(!ok) throw Error("RollbackFailed");
         throw;
     }

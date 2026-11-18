@@ -1,8 +1,31 @@
 # Bonfire
 
-Bonfire 是原生 Windows 和 Mac 单机游戏存档传送工具。当前适配《兽劳动》（Jurodo）。Windows x64 和 Apple Silicon 共用同一种 `.jurosave` 存档包。
+Bonfire 是原生 Windows 和 Mac 单机游戏存档传送工具。每款游戏使用独立的存档包，同一份包可在 Windows x64 和 Apple Silicon 上接收。
 
-当前预发布版本为 **0.1.0 Beta 2**。在 [Releases](https://github.com/airanluo-dot/Bonfire/releases) 可下载 Windows x64 便携 ZIP、当前用户安装 EXE，以及 Mac arm64 便携 ZIP 和安装到“应用程序”的 PKG。
+本分支的开发版本为 **0.1.0 Beta 3**。公开发行包见 [Releases](https://github.com/airanluo-dot/Bonfire/releases)。
+
+## 支持的游戏
+
+| 游戏 | 本次核对的发行版 | 存档包 |
+| --- | --- | --- |
+| 兽劳动 Jurodo | 1.3.0 | `.jurosave` |
+| 家有大猫 Nekojishi | Steam 1.06s，含成人补丁和《天气晴》扩展的识别。[Steam](https://store.steampowered.com/app/570840/) | `.nekosave` |
+| Adastra | 17。[作者发行页](https://echoproject.itch.io/adastra) | `.adastrasave` |
+| Interea | 0.4。[作者发行页](https://echoproject.itch.io/interea) | `.intereasave` |
+| Khemia | 0.4 重制版。[作者发行页](https://echoproject.itch.io/khemia) | `.khemiasave` |
+| 犹记繁花 第一部 | Part I 下载版 0.17.9。[作者发行页](https://jerichowo.itch.io/remember-the-flowers) | `.rtfsave` |
+| 出发！去落雪镇 | 主线 0.5.0.2。[作者发行页](https://yuxiu.itch.io/gotosnowtown) · [双端更新清单](https://api.kittyclub.cc/update.json?app=GoToSnowTown) | `.snowtownsave` |
+| 未烬之约 Emberbound | 体验版 1.8 与 1.9.2，接收时检查已知番外资源。[工作室双端下载页](https://www.flufforestudio.com/games/emberbound/?lang=zh-CN) | `.embersave` |
+
+### 补丁和跨设备读档
+
+Bonfire 会一起传送 Ren’Py 的手动、自动、快速和游戏自定义槽位，以及保存画廊、解锁记录和偏好的 `persistent`。它按游戏的存档目录标识定位当前用户的数据。如果游戏同时使用安装目录的 `game/saves`，同名槽取修改时间较新的副本。接收会同步当前安装使用的两处存档。独立 Mac 应用把存档写在用户目录。
+
+接收《家有大猫》时，Bonfire 会检查包中已识别的剧情及回溯位置是否引用成人补丁或《天气晴》。《未烬之约》会检查晟阳番外，《出发！去落雪镇》会检查已知的公开版独有剧情。发现目标缺少存档所需脚本时，预览会显示原因并暂停替换。补齐对应内容后重新选择目标或存档包即可。来源仅装有可选内容、存档没有引用相关剧情的《家有大猫》包可以接收。
+
+同一发行版的 Adastra、Interea 和 Khemia 已核对过本机汉化包，译文和字体沿用原版存档。游戏包只传送进度，目标设备的语言和游戏资源由目标设备上的安装提供。跨剧情重制版或尚未核对的第三方模组，仍取决于游戏自身对旧存档的兼容。
+
+带签名的 Ren’Py 存档会保留原始签名。换机后，游戏可能要求确认来源。若全局解锁未出现，在游戏中载入来自自己设备的槽位并确认信任，退出后再次接收同一个包。只有全局数据时，可先在来源设备新存一个槽位后重新提取。
 
 ## 使用
 
@@ -36,7 +59,7 @@ Bonfire 使用 Windows 当前用户注册表或 macOS 用户偏好保存配置�
 
 `core/discovery.cpp` 根据模块的识别规则扫描安装位置。`core/transfer.cpp` 在传送前复核游戏身份和运行状态，加锁并核对读写结果。`core/save_files.cpp` 提供平面存档目录替换及写入错误时的内存撤回。模块可自行实现不同结构的安装逻辑。
 
-`core/package.cpp` 使用小端编码。v2 文件包含游戏标识、32 位格式版本、64 位 Unix 生成时间（毫秒）、32 位条目数、条目和末尾 SHA-256。每项保存 32 位名称长度、32 位数据长度、ASCII 逻辑名及原始数据。每项不超过 16 MiB，每包最多 256 项、总数据不超过 64 MiB。读取器保留对 v1 的支持。原先仅实现 v1 的客户端无法打开新写出的 v2 文件。
+`core/package.cpp` 使用小端编码。v2 文件包含游戏标识、32 位格式版本、64 位 Unix 生成时间（毫秒）、32 位条目数、条目和末尾 SHA-256。每项保存 32 位名称长度、32 位数据长度、ASCII 逻辑名及原始数据。每包最多 256 项。《兽劳动》每项上限 16 MiB、总数据上限 64 MiB。Ren’Py 每项上限 64 MiB、总数据上限 256 MiB。读取器保留对 v1 的支持。原先仅实现 v1 的客户端无法打开新写出的 v2 文件。
 
 ## 双语开发约定
 
@@ -50,7 +73,7 @@ Bonfire 使用 Windows 当前用户注册表或 macOS 用户偏好保存配置�
 - **Apple Silicon** 需要 Xcode 命令行工具和 Python 3。运行 `sh macos/build.sh` 生成 `build-mac/Bonfire.app`。在装有 Xcode 27 的 Mac 上使用其 SDK 构建。脚本做本地 ad hoc 签名并调用 codesign 严格校验。公开发行的 Developer ID 签名、公证需要发布者凭据。
 - 两个构建脚本均可传入输出目录。在 Windows 的 x64 Native Tools 命令行中运行 `py -3 tests/run.py`，在 Mac 上运行 `python3 tests/run.py`。测试自动创建并清理临时游戏目录，检查完整往返、独立适配器、文件占用、v1 兼容、时间线排序与预览内容绑定。
 
-第三方代码许可见 `vendor/NOTICES.txt`。《兽劳动》图标来自游戏安装包。
+第三方代码许可见 `vendor/NOTICES.txt`。各游戏图标取自对应发行版，用于在 Bonfire 中识别游戏。
 
 Bonfire 的 Logo 以 `branding/Bonfire.svg` 为唯一设计基准。更新 Logo 时，从这份矢量原稿导出并同步替换 `branding/app.ico` 和 `branding/AppIcon.icns`。Windows 应用、安装器和快捷方式共用 ICO，macOS 应用使用 ICNS。构建时直接复制对应平台的图标，保留全部尺寸和透明通道。
 

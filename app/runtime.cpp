@@ -1,5 +1,6 @@
 #include "runtime.hpp"
 #include "updates.hpp"
+#include "../core/renpy_format.hpp"
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
@@ -10,7 +11,8 @@
 
 namespace transfer {
 static Json progress(const Progress& p) {
-    return {{"count",p.count},{"playtime",p.playtime},{"slot",p.slot}};
+    return {{"count",p.count},{"playtime",p.playtime},{"slot",p.slotName.empty()?Json(p.slot):Json(p.slotName)},
+        {"persistent",p.persistent},{"available",p.count>0 || p.persistent}};
 }
 // v1 retained the local wall-clock timestamp only in its original generated name.
 static int64_t legacyDate(const Path& path) {
@@ -90,7 +92,19 @@ Json request(const Json& in,const std::atomic_bool& stop) {
     if(op=="inventory") return progress(game.inventory(path("root")));
     if(op=="preview") {
         auto p=readPackage(game,path("path"));
-        return {{"progress",progress(p.progress)},{"checksum",p.checksum}};
+        Json notices=Json::array();
+        if(game.sharesUserSaves() && renpySignedPersistent(p.files))
+            notices.push_back(p.progress.count?"Renpy_Signed":"Renpy_SignedOnly");
+        Path target;
+        Json blocking=nullptr;
+        if(in.contains("root") && in["root"].is_string() && !in["root"].get<std::string>().empty()) {
+            target=path("root");
+            try { game.checkCompatibility(target,p.files); }
+            catch(const Error& e) { blocking={{"key",e.what()},{"args",e.arguments}}; }
+        }
+        auto notice=game.compatibilityNotice(target,p.files);
+        if(!notice.empty() && (blocking.is_null() || blocking["key"]!=notice)) notices.push_back(notice);
+        return {{"progress",progress(p.progress)},{"checksum",p.checksum},{"notices",notices},{"blocking",blocking}};
     }
     if(op=="export") return extract(game,path("root"),path("folder"),in.value("title",game.info.id)).u8string();
     if(op=="import") {

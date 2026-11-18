@@ -6,8 +6,10 @@
 #include <windows.h>
 #else
 #include <fcntl.h>
+#include <limits.h>
 #include <unistd.h>
 #include <sys/file.h>
+#include <sys/stat.h>
 #endif
 namespace transfer {
 class GameLock {
@@ -29,7 +31,24 @@ public:
             throw Error("Locked");
         }
 #else
-        fd = open(root.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+        if (game.sharesUserSaves()) {
+            // A second installation may write the same profile, even before
+            // the game has created its first save directory.
+            char temp[PATH_MAX];
+            const auto size=confstr(_CS_DARWIN_USER_TEMP_DIR,temp,sizeof(temp));
+            if (!size || size>sizeof(temp)) throw Error("LockFailed");
+            auto file=Path(temp)/("Bonfire-"+game.info.id+".lock");
+            fd=open(file.c_str(),O_CREAT|O_RDWR|O_CLOEXEC|O_NOFOLLOW|O_NONBLOCK,0600);
+            struct stat st{};
+            if (fd>=0 && (fstat(fd,&st) || !S_ISREG(st.st_mode) || st.st_uid!=getuid() || st.st_nlink!=1)) {
+                close(fd);
+                fd=-1;
+            }
+            // Keep the empty lock file: unlinking it can give concurrent
+            // callers different inodes. Closing the descriptor releases flock.
+        } else {
+            fd = open(root.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+        }
         if (fd < 0 || flock(fd, LOCK_EX | LOCK_NB)) {
             if (fd >= 0) close(fd);
             throw Error("LockFailed");
@@ -73,6 +92,7 @@ void receive(const GameAdapter& game,const Path& root,const Package& package) {
     if (package.gameId!=game.info.id) throw Error("WrongGame");
     game.validate(package.files);
     GameLock lock(game,root); requireClosed(game,root);
+    game.checkCompatibility(root,package.files);
     game.install(root,package.files);
 }
 }

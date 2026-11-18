@@ -115,9 +115,10 @@ public sealed partial class MainWindow : Window {
         group.Children.Add(label); page.Children.Add(Card(group));return group;
     }
     string Progress(JsonNode p,bool found) {
-        var count=p["count"]!.GetValue<int>(); if(count==0)return T("NoneProgress");
+        var count=p["count"]!.GetValue<int>();
+        if(count==0)return T(p["persistent"]!.GetValue<bool>()?"PersistentOnly":"NoneProgress");
         var summary=T("OneProgress");var time=p["playtime"]!.ToString();
-        var label=count>1?T("SlotPlaytime",p["slot"]!.ToString()):T("Playtime");
+        var label=count>1 && time.Length>0?T("SlotPlaytime",p["slot"]!.ToString()):T("Playtime");
         var prefix=(found?T("Found",summary):summary);
         return T("ProgressLine",prefix,T("LabelValue",label,time.Length>0?time:T("Unknown")));
     }
@@ -133,7 +134,7 @@ public sealed partial class MainWindow : Window {
             var list=new ComboBox { PlaceholderText=T("ManyInstalls"),HorizontalAlignment=HorizontalAlignment.Stretch };
             foreach(var i in installs)list.Items.Add(i!["install"]!.ToString());
             list.SelectedIndex=selected is null?-1:installs.IndexOf(selected);
-            list.SelectionChanged+=(_,_)=>{if(list.SelectedIndex>=0){Restart();selected=installs[list.SelectedIndex];inventory=null;Workspace();ReadInventory();}};
+            list.SelectionChanged+=(_,_)=>{if(list.SelectedIndex>=0){Restart();selected=installs[list.SelectedIndex];inventory=null;RefreshTarget();}};
             location.Children.Add(list);
         } else location.Children.Add(Text(selected?["install"]?.ToString()??T("NotSelected")));
         if(selected!=null)location.Children.Add(Text(T("LabelValue",T("SaveLocation"),selected["save"]!.ToString())));
@@ -144,7 +145,12 @@ public sealed partial class MainWindow : Window {
         if(receiving) {
             var file=Group(page,T("Package"));file.Children.Add(Text(package.Length>0?package:T("NotSelected")));
             file.Children.Add(Button(T("ChooseFile"),()=>PickPackage()));
-            if(preview!=null)file.Children.Add(Text(Progress(preview,false)));
+            if(preview!=null) {
+                file.Children.Add(Text(Progress(preview["progress"]!,false)));
+                foreach(var notice in preview["notices"]!.AsArray()) file.Children.Add(Text(T(notice!.ToString())));
+                if(preview["blocking"] is JsonObject issue)
+                    file.Children.Add(Text(T(issue["key"]!.ToString(),issue["args"]!.AsArray().Select(a=>(object)a!.ToString()).ToArray())));
+            }
         } else {
             if(inventory!=null)location.Children.Add(Text(Progress(inventory,true)));
             var folder=Group(page,T("SaveTo"));folder.Children.Add(Text(destination));
@@ -152,7 +158,7 @@ public sealed partial class MainWindow : Window {
         }
         status=Text(message);page.Children.Add(status);
         var go=Button(T(receiving?"Replace":"Extract"),()=>Transfer());
-        go.IsEnabled=selected!=null && (receiving?preview!=null:inventory?["count"]?.GetValue<int>()>0);
+        go.IsEnabled=selected!=null && (receiving?preview!=null && preview["blocking"]==null:inventory?["available"]?.GetValue<bool>()==true);
         go.Style=(Style)Application.Current.Resources["AccentButtonStyle"];page.Children.Add(go);Body(page);
     }
     async Task<JsonNode?> Run(object request,CancellationToken token) {
@@ -162,12 +168,16 @@ public sealed partial class MainWindow : Window {
     }
     string ErrorText(Exception e)=>e is ServiceError err ? T(err.Message,err.Values) : T("Unexpected",e.Message);
     async void Locate(string? path=null) {
-        Restart(); var token=screen.Token;selected=null;installs=[];inventory=null;Workspace(T("Finding"));
+        Restart(); var token=screen.Token;selected=null;installs=[];inventory=null;preview=null;digest="";Workspace(T("Finding"));
         var found=await Run(new {op=path==null?"locate":"identify",game,path},token);
         if(found==null||token.IsCancellationRequested)return;
         installs=found.AsArray();selected=installs.Count==1?installs[0]:null;
-        Workspace(selected!=null?"":T(installs.Count>1?"ManyInstalls":"NoInstall"));
-        if(selected!=null) ReadInventory();
+        if(selected!=null) RefreshTarget();
+        else Workspace(T(installs.Count>1?"ManyInstalls":"NoInstall"));
+    }
+    void RefreshTarget(){
+        preview=null;digest="";Workspace();ReadInventory();
+        if(package.Length>0) PreviewPackage(package);
     }
     async void ReadInventory(){
         var token=screen.Token;
@@ -185,13 +195,17 @@ public sealed partial class MainWindow : Window {
     int previewGeneration;
     async void PickPackage() {
         var token=screen.Token;var path=await Pick(false);if(path==null||token.IsCancellationRequested)return;
+        PreviewPackage(path);
+    }
+    async void PreviewPackage(string path) {
+        var token=screen.Token;
         var sequence=++previewGeneration;package=path;preview=null;digest="";Workspace(T("Busy"));
-        var result=await Run(new{op="preview",game,path},token);
-        if(sequence==previewGeneration&&result!=null&&!token.IsCancellationRequested){preview=result["progress"];digest=result["checksum"]!.ToString();Workspace();}
+        var result=await Run(new{op="preview",game,path,root=selected?["root"]?.ToString()},token);
+        if(sequence==previewGeneration&&result!=null&&!token.IsCancellationRequested){preview=result;digest=result["checksum"]!.ToString();Workspace();}
     }
     async void Transfer(){
         if(writing || selected==null)return;
-        writing=true;Nav.IsEnabled=false;status.Text=T("Busy");
+        writing=true;Nav.IsEnabled=false;Surface.IsEnabled=false;Header.IsHitTestVisible=false;status.Text=T("Busy");
         try{
             var root=selected["root"]!.ToString();
             var result=await Run(new{op=receiving?"import":"export",game,root,title=GameName(game),folder=destination,path=package,checksum=digest},screen.Token);
@@ -201,7 +215,7 @@ public sealed partial class MainWindow : Window {
             if(receiving) {inventory=await Run(new {op="inventory",game,root},screen.Token);}
             try{prefs.Remember(folder);}catch(Exception e){success+="\n"+ErrorText(e);}
             Workspace(success);
-        }finally{writing=false;Nav.IsEnabled=true;_ = updates.ApplyAutomaticIfReady();}
+        }finally{writing=false;Nav.IsEnabled=true;Surface.IsEnabled=true;Header.IsHitTestVisible=true;_ = updates.ApplyAutomaticIfReady();}
     }
     async void Timeline(string? single=null) {
         Restart();var token=screen.Token;

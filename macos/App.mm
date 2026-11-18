@@ -171,10 +171,11 @@ static NSDictionary *call(NSDictionary *input,Stop stop){
     }});
 }
 - (NSString*)summary:(NSDictionary*)p found:(BOOL)found {
-    NSInteger count=[p[@"count"] integerValue];if(!count)return [self t:@"NoneProgress"];
+    NSInteger count=[p[@"count"] integerValue];
+    if(!count)return [self t:[p[@"persistent"] boolValue]?@"PersistentOnly":@"NoneProgress"];
     NSString *one=[self t:@"OneProgress"];
     NSString *time=[p[@"playtime"] length]?p[@"playtime"]:[self t:@"Unknown"];
-    NSString *label=count>1?[self format:@"SlotPlaytime" arg:p[@"slot"]]:[self t:@"Playtime"];
+    NSString *label=count>1 && [p[@"playtime"] length]?[self format:@"SlotPlaytime" arg:p[@"slot"]]:[self t:@"Playtime"];
     return [_strings text:@"ProgressLine" arguments:@[found?[self format:@"Found" arg:one]:one,[_strings text:@"LabelValue" arguments:@[label,time]]]];
 }
 - (NSStackView*)group:(NSString*)key {
@@ -202,20 +203,28 @@ static NSDictionary *call(NSDictionary *input,Stop stop){
     }else{
         NSStackView *file=[self group:@"Package"];[file addArrangedSubview:BFLabel(_package.length?_package:[self t:@"NotSelected"],13,NSFontWeightRegular)];
         [file addArrangedSubview:BFButton([self t:@"ChooseFile"],^{[self pick:NO game:NO done:^(NSString *p){[self preview:p];}];})];
-        if(_preview)[file addArrangedSubview:BFLabel([self summary:_preview found:NO],14,NSFontWeightMedium)];
+        if(_preview){
+            [file addArrangedSubview:BFLabel([self summary:_preview[@"progress"] found:NO],14,NSFontWeightMedium)];
+            for(NSString *key in _preview[@"notices"]) BFFillWidth(file,BFLabel([self t:key],13,NSFontWeightRegular));
+            if([_preview[@"blocking"] isKindOfClass:NSDictionary.class]){
+                NSDictionary *issue=_preview[@"blocking"];
+                BFFillWidth(file,BFLabel([_strings text:issue[@"key"] arguments:issue[@"args"]],13,NSFontWeightMedium));
+            }
+        }
     }
     _status.stringValue=message;[_page addArrangedSubview:_status];
     NSButton *go=BFButton([self t:_receiving?@"Replace":@"Extract"],^{[self transfer];});go.bezelColor=NSColor.controlAccentColor;
-    go.enabled=_install&&(_receiving?_preview!=nil:[_inventory[@"count"] integerValue]>0);[_page addArrangedSubview:go];
+    go.enabled=_install&&(_receiving?_preview && _preview[@"blocking"]==NSNull.null:[_inventory[@"available"] boolValue]);[_page addArrangedSubview:go];
 }
 - (void)mode:(NSSegmentedControl*)sender {if(!_writing){_receiving=sender.selectedSegment==1;[self workspace:@""];}}
-- (void)chooseRoot:(NSPopUpButton*)sender {if(_writing||sender.indexOfSelectedItem<1)return;[self restart];_install=_installs[sender.indexOfSelectedItem-1];_inventory=nil;[self workspace:@""];[self readInventory];}
+- (void)refreshTarget {_preview=nil;_checksum=@"";[self workspace:@""];[self readInventory];if(_package.length)[self preview:_package];}
+- (void)chooseRoot:(NSPopUpButton*)sender {if(_writing||sender.indexOfSelectedItem<1)return;[self restart];_install=_installs[sender.indexOfSelectedItem-1];_inventory=nil;[self refreshTarget];}
 - (void)find:(NSString*)path {
     if(_writing)return;
-    [self restart];_install=nil;_installs=@[];_inventory=nil;[self workspace:[self t:@"Finding"]];
+    [self restart];_install=nil;_installs=@[];_inventory=nil;_preview=nil;_checksum=@"";[self workspace:[self t:@"Finding"]];
     [self perform:path?@{@"op":@"identify",@"path":path}:@{@"op":@"locate"} done:^(NSArray *found){
         if(!found)return;self->_installs=found;self->_install=found.count==1?found[0]:nil;[self workspace:self->_install?@"":[self t:found.count?@"ManyInstalls":@"NoInstall"]];
-        if(self->_install)[self readInventory];
+        if(self->_install)[self refreshTarget];
     }];
 }
 - (void)readInventory {
@@ -229,7 +238,7 @@ static NSDictionary *call(NSDictionary *input,Stop stop){
 - (void)preview:(NSString*)path {
     if(_writing)return;
     NSUInteger generation=++_previewGeneration;_package=path;_preview=nil;_checksum=@"";[self workspace:[self t:@"Busy"]];
-    [self perform:@{@"op":@"preview",@"path":path} done:^(NSDictionary *p){if(p && generation==self->_previewGeneration){self->_preview=p[@"progress"];self->_checksum=p[@"checksum"];[self workspace:@""];}}];
+    [self perform:@{@"op":@"preview",@"path":path,@"root":_install[@"root"]?:NSNull.null} done:^(NSDictionary *p){if(p && generation==self->_previewGeneration){self->_preview=p;self->_checksum=p[@"checksum"];[self workspace:@""];}}];
 }
 - (void)transfer {
     if(_writing||_updates.installing)return;
