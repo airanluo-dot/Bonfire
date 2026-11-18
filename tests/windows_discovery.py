@@ -1,5 +1,6 @@
 """Exercise the shipped Windows DLL with an empty user hive and two Steam libraries."""
 import ctypes
+from contextlib import ExitStack
 import json
 from pathlib import Path
 import sys
@@ -47,8 +48,9 @@ def main(library):
 
         # Redirect predefined roots only in this short-lived process.
         hive = "Software\\Bonfire.SteamTest." + uuid.uuid4().hex
-        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, hive + "\\User") as user, \
+        with ExitStack() as cleanup, winreg.CreateKey(winreg.HKEY_CURRENT_USER, hive + "\\User") as user, \
                 winreg.CreateKey(winreg.HKEY_CURRENT_USER, hive + "\\Machine") as machine:
+            cleanup.callback(erase_test_hive, hive)
             try:
                 assert redirect(current_user, int(user)) == 0 and redirect(local_machine, int(machine)) == 0
                 with winreg.CreateKeyEx(winreg.HKEY_LOCAL_MACHINE, "Software\\Valve\\Steam", 0,
@@ -73,7 +75,6 @@ def main(library):
                     dll.bf_token_free(token)
             finally:
                 assert redirect(local_machine, None) == 0 and redirect(current_user, None) == 0
-        erase_test_hive(hive)
     print("Windows DLL located both Steam installations via the machine registry without a user Steam key.")
 
 
