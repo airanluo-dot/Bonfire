@@ -79,7 +79,7 @@ def check_content_versions(game, call, source, target, primary, other, target_ga
         error = "Emberbound_SideStoryMissing"
     else:
         script = "scripts/story/story_ep1.rpy"
-        data = slot(400, 700, script="game/" + script)
+        data = slot(400, 700, script={"current": ("game/" + script, 1, 2)})
         error = "Snowtown_PublicMissing"
     (primary / "quick-2-LT1.save").write_bytes(data)
     path = call(source_env, "export", root=str(source), folder=str(packages))

@@ -135,30 +135,30 @@ void replaceMirrors(const std::vector<Path>& dirs,const Files& incoming,NameFilt
         copies.push_back(std::move(copy));
     }
     try {
-      for(auto& copy:copies) {
-        const auto& dir=copy.dir;
-        const auto& before=copy.before;
-        auto& touched=copy.touched;
-        copy.made=fs::create_directory(dir);
-        checkReal(dir,true);
-        auto install=[&](const std::string& name,const Bytes& data) {
-            auto previous=before.find(name);
-            if(previous==before.end()) {
-                if(!writeNewFile(dir/name,data)) throw Error("Collision");
+        for (auto& copy : copies) {
+            const auto& dir=copy.dir;
+            const auto& before=copy.before;
+            auto& touched=copy.touched;
+            copy.made=fs::create_directory(dir);
+            checkReal(dir,true);
+            auto install=[&](const std::string& name,const Bytes& data) {
+                auto previous=before.find(name);
+                if(previous==before.end()) {
+                    if(!writeNewFile(dir/name,data)) throw Error("Collision");
+                    touched.push_back(name);
+                    return;
+                }
+                if(previous->second==data) return;
                 touched.push_back(name);
-                return;
+                write(openFile(dir/name,Access::replace),data);
+            };
+            for(const auto& [n,b]:incoming) if(n!=lastFile) install(n,b);
+            if (incoming.count(lastFile)) install(lastFile,incoming.at(lastFile));
+            for(const auto& [n,b]:before) if(!incoming.count(n)) {
+                if(fs::remove(dir/n)) touched.push_back(n);
             }
-            if(previous->second==data) return;
-            touched.push_back(name);
-            write(openFile(dir/name,Access::replace),data);
-        };
-        for(const auto& [n,b]:incoming) if(n!=lastFile) install(n,b);
-        if (incoming.count(lastFile)) install(lastFile,incoming.at(lastFile));
-        for(const auto& [n,b]:before) if(!incoming.count(n)) {
-            if(fs::remove(dir/n)) touched.push_back(n);
+            if(snapshot(dir,filter,limits)!=incoming) throw Error("VerifyFailed");
         }
-        if(snapshot(dir,filter,limits)!=incoming) throw Error("VerifyFailed");
-      }
     } catch(...) {
         bool ok=true;
         for(auto copy=copies.rbegin();copy!=copies.rend();++copy) {

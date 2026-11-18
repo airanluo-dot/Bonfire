@@ -14,11 +14,11 @@ public:
         // its story_ep*.rpy locations do not exist in the latter's scripts.
         std::set<std::string> chapters;
         renpyProgress(files, [&](const Bytes& log) {
-            std::string_view data(reinterpret_cast<const char*>(log.data()), log.size());
-            for (const auto* chapter : {"scripts/story/story_ep0.rpy", "scripts/story/story_ep1.rpy",
-                                        "scripts/story/story_ep2.rpy"}) {
-                if (data.find(std::string("game/") + chapter) != data.npos) chapters.insert(chapter);
-            }
+            visitRenpyStatements(log, [&](std::string_view path) {
+                for (const auto* chapter : {"game/scripts/story/story_ep0.rpy", "game/scripts/story/story_ep1.rpy",
+                                            "game/scripts/story/story_ep2.rpy"})
+                    if (path == chapter) chapters.emplace(path.substr(5));
+            });
         });
         if (chapters.empty()) return;
         auto base = dataRoot(root);

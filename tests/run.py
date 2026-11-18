@@ -1,4 +1,5 @@
 """Run the native transfer tests with synthetic game data on Windows or macOS."""
+import argparse
 import json
 from pathlib import Path
 import re
@@ -51,6 +52,9 @@ def game_fixture(work):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--export-cross", type=Path, help="Write fixtures and the native runner for the other OS test")
+    args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="bonfire-tests-") as temp:
         work = Path(temp)
         destination = work / "destination"
@@ -68,3 +72,8 @@ if __name__ == "__main__":
         check_renpy_format(executable, work)
         from nekojishi import check as check_nekojishi
         check_nekojishi(executable, work)
+        from renpy_paths import check as check_renpy_paths
+        check_renpy_paths(executable, work)
+        if args.export_cross:
+            from renpy_cross import export
+            export(executable, work, args.export_cross.resolve())

@@ -2,7 +2,7 @@
 #include "inflate.hpp"
 #include <charconv>
 #include <fstream>
-#include <string_view>
+#include <set>
 
 namespace transfer {
 namespace {
@@ -46,6 +46,53 @@ std::optional<Bytes> archiveIndex(const Path& path) {
     if (checksum != ((b << 16) | a)) return {};
     return index;
 }
+}
+
+// A Ren'Py statement ID in the saved execution/rollback state is a tuple
+// (script filename, script timestamp, serial). Only recognize that literal
+// encoding in the protocol-2 log. A gallery flag or dialogue string alone
+// does not establish a script dependency. Never load Python objects.
+static uint32_t little32(const Bytes& bytes, size_t pos) {
+    return bytes[pos] | (unsigned(bytes[pos+1])<<8) |
+        (unsigned(bytes[pos+2])<<16) | (uint32_t(bytes[pos+3])<<24);
+}
+void visitRenpyStatements(const Bytes& log, const std::function<void(std::string_view)>& visit) {
+    if (log.size() < 8 || log[0] != 0x80 || log[1] != 2) return;
+    std::set<uint32_t> currentFields;
+    const std::string_view view(reinterpret_cast<const char*>(log.data()), log.size());
+    for (size_t i = 2; i + 5 < log.size(); ++i) {
+        // The execution context stores the statement ID under "current".
+        // Later contexts often refer to that field by its pickle memo index.
+        size_t pos = i;
+        bool direct = false;
+        if (log[i]=='U' && log[i+1]==7 && view.substr(i+2,7)=="current") {
+            pos=i+9; direct=true;
+        } else if (log[i]=='X' && little32(log,i+1)==7 && view.substr(i+5,7)=="current") {
+            pos=i+12; direct=true;
+        } else if (log[i]=='h' && currentFields.count(log[i+1])) pos=i+2;
+        else if (log[i]=='j' && currentFields.count(little32(log,i+1))) pos=i+5;
+        else continue;
+        if (direct && pos+2 <= log.size() && log[pos]=='q') {
+            currentFields.insert(log[pos+1]); pos+=2;
+        } else if (direct && pos+5 <= log.size() && log[pos]=='r') {
+            currentFields.insert(little32(log,pos+1)); pos+=5;
+        }
+        if (pos+5 >= log.size() || log[pos]!='X') continue; // BINUNICODE filename
+        auto length=little32(log,pos+1);
+        pos+=5;
+        if (length < 16 || length > 4096 || length >= log.size() - pos) continue;
+        std::string_view path(reinterpret_cast<const char*>(log.data()+pos), length);
+        pos += length;
+        if (log[pos] == 'q') pos += 2;       // BINPUT
+        else if (log[pos] == 'r') pos += 5;  // LONG_BINPUT
+        for (int n = 0; n < 2 && pos < log.size(); ++n) {
+            if (log[pos] == 'J') pos += 5;       // BININT
+            else if (log[pos] == 'M') pos += 3;  // BININT2
+            else if (log[pos] == 'K') pos += 2;  // BININT1
+            else { pos = log.size(); break; }
+        }
+        if (pos < log.size() && log[pos] == 0x87) visit(path); // TUPLE3
+    }
 }
 
 std::optional<bool> renpyHasScript(const Path& directory, const std::string& sourceName) {

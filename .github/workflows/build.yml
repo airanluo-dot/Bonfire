@@ -17,7 +17,7 @@ jobs:
           xcodebuild -version
           test "$(uname -m)" = arm64
           test "$(xcrun --sdk macosx --show-sdk-version | cut -d. -f1)" -ge 27
-          python3 tests/run.py
+          python3 tests/run.py --export-cross "$RUNNER_TEMP/cross-fixtures"
           sh macos/build.sh "$RUNNER_TEMP/build"
           sh macos/package.sh "$RUNNER_TEMP/build/Bonfire.app" dist
           mkdir "$RUNNER_TEMP/update-test"
@@ -42,6 +42,12 @@ jobs:
           name: macos-arm64
           path: dist/*
           compression-level: 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cross-darwin
+          path: ${{ runner.temp }}/cross-fixtures/
+          retention-days: 1
+          if-no-files-found: error
   windows:
     runs-on: windows-2025
     timeout-minutes: 35
@@ -54,7 +60,7 @@ jobs:
         shell: cmd
         run: |
           for /f "usebackq delims=" %%V in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do call "%%V\VC\Auxiliary\Build\vcvars64.bat"
-          python tests/run.py
+          python tests/run.py --export-cross "%RUNNER_TEMP%\cross-fixtures"
           if errorlevel 1 exit /b 1
           call windows\build.cmd "%RUNNER_TEMP%\build"
       - name: Create portable ZIP and bilingual per-user installer
@@ -106,3 +112,28 @@ jobs:
           name: windows-x64
           path: dist/*
           compression-level: 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cross-win32
+          path: ${{ runner.temp }}/cross-fixtures/
+          retention-days: 1
+          if-no-files-found: error
+  cross-platform-import:
+    needs: [mac, windows]
+    strategy:
+      matrix:
+        include:
+          - runner: xcode-27
+            python: python3
+          - runner: windows-2025
+            python: python
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: cross-*
+          path: ${{ runner.temp }}/cross-artifacts
+      - name: Import the other operating system's seven game packages
+        run: ${{ matrix.python }} tests/renpy_cross.py "${{ runner.temp }}/cross-artifacts"
