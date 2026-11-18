@@ -254,7 +254,8 @@ NSURL *destination(NSURL *directory, NSDictionary *plan, BOOL& exists, Cancellat
             if (!error) { finish(value); return; }
             self->_installing = self->_automaticDownload = NO;
             self->_retryAction = action;
-            if ([action isEqual:@"check"] && ([error isEqual:@"UpdateIntegrity"] || [error isEqual:@"UpdateInvalidFeed"])) {
+            if ([action isEqual:@"check"] && ([error isEqual:@"UpdateIntegrity"] || [error isEqual:@"UpdateInvalidFeed"] ||
+                                               [error isEqual:@"UpdateMissing"])) {
                 self->_candidate = nil;
                 self->_download = nil;
             }
@@ -405,7 +406,7 @@ NSURL *destination(NSURL *directory, NSDictionary *plan, BOOL& exists, Cancellat
         try {
             Json verified = query;
             NSURL *manifest = [NSURL URLWithString:string(stub.at("checksumsUrl").get<std::string>())];
-            NSData *data = [self body:manifest limit:1024 * 1024 endpoint:Endpoint::asset stop:stop];
+            NSData *data = [self body:manifest limit:64 * 1024 endpoint:Endpoint::asset stop:stop];
             NSString *checksums = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
             if (!checksums) throw Error("UpdateIntegrity");
             verified["checksums"] = std::string((const char*)data.bytes, data.length);
@@ -524,8 +525,13 @@ NSURL *destination(NSURL *directory, NSDictionary *plan, BOOL& exists, Cancellat
         if (_installing || _needsReopen) return;
         _download = nil;
         _candidate = nil;
-        [self cancel];
-        [self check];
+        _prefs.lastCheck = nil;
+        [_prefs save];
+        if (_busy) [self cancel];
+        _pendingAutomatic = _pendingManual = NO;
+        _retryAction = nil;
+        if (_prefs.autoCheck) [self check];
+        else [self emit:@"UpdateIdle"];
     } else if ([key isEqual:@"autoInstall"]) {
         _pendingAutomatic = _prefs.autoInstall && _download;
         if (_pendingAutomatic) [self applyAutomaticIfReady];

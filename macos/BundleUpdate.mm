@@ -54,7 +54,9 @@ void BFReplaceApplication(NSURL *archive, NSURL *current, NSString *version,
             throw Error("UpdateInstallFailed");
         }
         // The extractor opens its own file handle. Verify the private copy it will read.
-        if (!verifyArchive(copy)) throw Error("UpdateIntegrity");
+        struct stat copied{};
+        if (lstat(copy.fileSystemRepresentation, &copied) || !S_ISREG(copied.st_mode) || !verifyArchive(copy))
+            throw Error("UpdateIntegrity");
         command(@"/usr/bin/ditto", @[@"-x", @"-k", copy.path, stage.path], "UpdateInstallFailed");
         NSURL *fresh = [stage URLByAppendingPathComponent:@"Bonfire.app"];
         NSDictionary *info = bundleInfo(fresh);

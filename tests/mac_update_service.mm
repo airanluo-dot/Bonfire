@@ -118,8 +118,10 @@ int main(int argc, const char** argv) { @autoreleasepool { try {
     prefs.autoInstall = NO; [u preferencesChanged:@"autoInstall"]; waitFor(u,@"UpdateReady");
     [NSFileManager.defaultManager removeItemAtURL:u.download error:nil]; [u reveal];
     check(!u.download && [u.status isEqual:@"UpdateDownloadedMissing"], "removed download");
-    prefs.channel = @"Stable"; [u preferencesChanged:@"channel"]; waitFor(u,@"UpdateCurrent");
-    check(!u.download && !u.candidate, "channel change discarded previous update");
+    prefs.channel = @"Stable"; [u preferencesChanged:@"channel"]; waitFor(u,@"UpdateIdle");
+    check(!u.download && !u.candidate && !prefs.lastCheck, "channel change discarded the old state without an automatic check");
+    [u check]; waitFor(u,@"UpdateCurrent");
+    prefs.autoCheck = YES; prefs.channel = @"Beta"; [u preferencesChanged:@"channel"]; waitFor(u,@"UpdateAvailable");
     std::puts("Mac check, official fallbacks, cancel, verify, retry, recovery, channel and deferred install: OK");
     return 0;
 } catch (const std::exception& e) { std::fprintf(stderr,"%s\n",e.what()); return 1; } }}

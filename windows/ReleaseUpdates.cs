@@ -96,15 +96,35 @@ internal sealed class ReleaseUpdates(Preferences prefs, Func<bool> canInstall, A
 
     public Task Check() => Execute(async token => {
         Set("UpdateChecking");
-        var plan = await transport.Select(Version, prefs.Channel, Installed ? "Windows-x64-Setup.exe" : "Windows-x64-Portable.zip", token);
+        JsonNode plan;
+        try {
+            plan = await transport.Select(Version, prefs.Channel, Installed ? "Windows-x64-Setup.exe" : "Windows-x64-Portable.zip", token);
+        } catch (ServiceError error) when (error.Message is "UpdateIntegrity" or "UpdateInvalidFeed" or "UpdateMissing") {
+            token.ThrowIfCancellationRequested();
+            Candidate = null;
+            LocalFile = null;
+            throw;
+        }
         token.ThrowIfCancellationRequested();
         prefs.LastCheck = DateTimeOffset.UtcNow;
         prefs.Save();
         if (plan["url"] == null) { Candidate = null; LocalFile = null; Set("UpdateCurrent"); return; }
-        if (Candidate?["hash"]?.ToString() != plan["hash"]!.ToString()) LocalFile = null;
+        if (!JsonNode.DeepEquals(Candidate, plan)) LocalFile = null;
         Candidate = plan;
         Set("UpdateAvailable");
         if (prefs.AutoDownload) await DownloadCore(token,true);
+        else if (LocalFile is string cached) {
+            LocalFile = null;
+            try {
+                if (File.GetAttributes(cached).HasFlag(FileAttributes.ReparsePoint)) return;
+                await using var file = File.OpenRead(cached);
+                if (!await Matches(file,plan,token)) return;
+                token.ThrowIfCancellationRequested();
+                LocalFile = cached;
+                Set(Installed ? "UpdateReady" : "UpdatePortableReady");
+            } catch (FileNotFoundException) { /* The candidate can be downloaded again. */ }
+            catch (DirectoryNotFoundException) { /* The downloads directory was moved. */ }
+        }
     }, "UpdateNetwork");
 
     static async Task<bool> Matches(Stream stream, JsonNode plan, CancellationToken token) {

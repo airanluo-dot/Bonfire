@@ -25,11 +25,11 @@ internal static class Program {
         var file = Filename(installed);
         var host = new Host(folder,installed);
         var prefs = new Preferences();
-        bool canInstall = true, closed = false, corrupt = false, stall = false;
+        bool canInstall = true, closed = false, corrupt = false, stall = false, invalidFeed = false;
         var entered = new TaskCompletionSource();
         int requests = 0;
         using var http = new HttpClient(new Handler(async (request,token) => {
-            if (request.RequestUri!.Host == "api.github.com") return Ok(Feed(file));
+            if (request.RequestUri!.Host == "api.github.com") return Ok(invalidFeed ? "{}" : Feed(file));
             Expect(request.RequestUri.AbsoluteUri == Url(file), "asset URI");
             requests++;
             if (stall) { entered.TrySetResult(); await Task.Delay(Timeout.InfiniteTimeSpan,token); }
@@ -62,6 +62,14 @@ internal static class Program {
         int networkCount = requests;
         await updater.Download();
         Expect(updater.LocalFile==saved && requests==networkCount, "reuse verified bytes");
+        await updater.Check();
+        Expect(updater.LocalFile==saved && updater.Status==(installed?"UpdateReady":"UpdatePortableReady"), "verified download remains ready after checking");
+        invalidFeed=true;
+        await updater.Check();
+        Expect(updater.Status=="UpdateInvalidFeed" && updater.LocalFile==null && updater.Candidate==null, "invalid release withdraws the install action");
+        invalidFeed=false;
+        await updater.Check();await updater.Download();
+        Expect(updater.LocalFile==saved && requests==networkCount, "retry reuses the verified download");
         if (!installed) {
             File.Delete(saved);updater.Reveal();
             Expect(updater.LocalFile==null && updater.Status=="UpdateDownloadedMissing","missing portable download");

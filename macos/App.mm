@@ -382,7 +382,8 @@ static NSDictionary *call(NSDictionary *input,Stop stop){
     [_prefs setValue:@(sender.state==NSControlStateValueOn) forKey:sender.identifier];[_prefs save];[_updates preferencesChanged:sender.identifier];
 }
 - (void)updateChannel:(NSPopUpButton*)sender {
-    _prefs.channel=sender.indexOfSelectedItem==1?@"Beta":@"Stable";[_prefs save];[_updates preferencesChanged:@"channel"];
+    NSString *channel=sender.indexOfSelectedItem==1?@"Beta":@"Stable";
+    if(![_prefs.channel isEqual:channel]){_prefs.channel=channel;[_updates preferencesChanged:@"channel"];}
 }
 
 
