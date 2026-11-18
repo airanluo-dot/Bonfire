@@ -22,13 +22,18 @@ GAMES = (
 PICKLE = b"\x80\x02N."
 
 
-def slot(seconds, timestamp, *, chapter=None, script=None):
+def slot(seconds, timestamp, *, chapter=None, script=None, wall_time=None):
     stream = io.BytesIO()
-    metadata = {"_ctime": timestamp, "_game_runtime": seconds}
+    metadata = {}
+    if timestamp is not None:
+        metadata["_ctime"] = timestamp
+    if seconds is not None:
+        metadata["_game_runtime"] = seconds
     if chapter:
         metadata["emberbound_chapter"] = chapter
     with zipfile.ZipFile(stream, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr("log", pickle.dumps(script, protocol=2) if script else PICKLE)
+        log = zipfile.ZipInfo("log", wall_time) if wall_time else "log"
+        archive.writestr(log, pickle.dumps(script, protocol=2) if script else PICKLE)
         archive.writestr("json", json.dumps(metadata))
         archive.writestr("renpy_version", "Ren'Py 8.3.2")
     return stream.getvalue()
@@ -127,6 +132,25 @@ def check(executable, work):
         assert state["available"] and state["persistent"] and state["count"] == 0, (game, state)
         assert call(target_env, "import", root=str(target), path=first, checksum=header["checksum"]) is True
         assert (other / "persistent").read_bytes() == persistent
+
+        if game == "interea":
+            legacy = primary / "auto-1-LT1.save"
+            for date, expected in [((2026, 10, 29, 2, 50, 24), "2026-10-29 02:50"),
+                                   ((1980, 1, 1, 0, 0, 0), "")]:
+                legacy.write_bytes(slot(None, None, wall_time=date))
+                state = call(source_env, "inventory", root=str(source))
+                assert state["count"] == 1 and not state["playtime"] and state["savedLocalTime"] == expected, state
+            legacy.unlink()
+        if game == "emberbound":
+            older, latest = primary / "1-1-LT1.save", primary / "2-1-LT1.save"
+            older.write_bytes(slot(8000, 100, chapter="extra_shengyang_day"))
+            for chapter, key in [("part1","Emberbound_Part1"), ("part2","Emberbound_Part2"),
+                                 ("extra_shengyang_day","Emberbound_ShengyangDay"), ("future_chapter","")]:
+                latest.write_bytes(slot(60, 200, chapter=chapter))
+                state = call(source_env, "inventory", root=str(source))
+                assert state["chapterKey"] == key and state["playtime"] == "00:01:00", state
+            older.unlink()
+            latest.unlink()
 
         manual = "0-LT1.save" if game == "gotosnowtown" else "1-1-LT1.save"
         second = "quit-LT1.save" if game == "gotosnowtown" else "auto-1-LT1.save"

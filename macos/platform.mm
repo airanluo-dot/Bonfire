@@ -3,6 +3,7 @@
 #import <CoreServices/CoreServices.h>
 #include "../app/runtime.hpp"
 #include <algorithm>
+#include <chrono>
 #include <memory>
 #include <libproc.h>
 #include <unistd.h>
@@ -57,44 +58,98 @@ bool transfer::gameIsRunning(const GameAdapter& game,const Path& root) {
         throw Error("Translocation");
     return game.sharesUserSaves() && runningRenpyProcess(game);
 }
-std::vector<Path> transfer::locate(const GameAdapter& game,const std::atomic_bool& stop) {
-    Path home=NSHomeDirectory().fileSystemRepresentation;
-    std::vector<Path> hints{path(NSBundle.mainBundle.bundleURL).parent_path()};
-    addSteamHints(game,special(NSApplicationSupportDirectory)/"Steam",hints,stop);
-    for(const auto& identifier:game.info.macBundleIds)
-        for(NSURL *u in [NSWorkspace.sharedWorkspace URLsForApplicationsWithBundleIdentifier:str(identifier)])
-            hints.push_back(path(u));
-    for(const Path& parent : std::vector<Path>{"/Applications",home/"Applications",home/"Games"}) {
-        for(const auto& name : game.info.macAppNames) hints.push_back(parent/fs::u8path(name));
+static void addMacAppHints(const GameAdapter& game, const Path& parent, std::vector<Path>& hints) {
+    for (const auto& name : game.info.macAppNames) hints.push_back(parent / fs::u8path(name));
+}
+
+static void addMacDownloadHints(const GameAdapter& game, const Path& parent, std::vector<Path>& hints,
+                                const std::atomic_bool& stop) {
+    // Distribution directories often include a version, e.g. Interea-0.4-mac/Interea.app.
+    std::error_code ec;
+    for (fs::directory_iterator it(parent, fs::directory_options::skip_permission_denied, ec), end;
+         !ec && !stop && it != end; it.increment(ec)) {
+        if (it->path().extension() == ".app") continue;
+        NSString *name = str(it->path().filename().u8string());
+        for (const auto& prefix : game.info.folderNames) {
+            if ([name rangeOfString:str(prefix) options:(NSAnchoredSearch | NSCaseInsensitiveSearch)].location == NSNotFound)
+                continue;
+            if (it->is_directory(ec)) addMacAppHints(game, it->path(), hints);
+            break;
+        }
     }
-    auto installed=discover(game,hints,{},{},stop);
-    if(stop || !installed.empty()) return installed;
+}
+
+static void addSpotlightHints(const GameAdapter& game, std::vector<Path>& hints, const std::atomic_bool& stop) {
     NSMutableArray<NSString*> *predicates=[NSMutableArray array];
     for(const auto& name:game.info.macAppNames) {
         NSString *escaped=[str(name) stringByReplacingOccurrencesOfString:@"'" withString:@"\\'"];
         [predicates addObject:[NSString stringWithFormat:@"kMDItemFSName == '%@'cd",escaped]];
     }
     MDQueryRef q=predicates.count ? MDQueryCreate(nullptr,(__bridge CFStringRef)[predicates componentsJoinedByString:@" || "],nullptr,nullptr) : nullptr;
-    if(q) {
-        if(MDQueryExecute(q,kMDQuerySynchronous)) {
-            for(CFIndex i=0;i<MDQueryGetResultCount(q) && !stop;++i) {
-                MDItemRef item=(MDItemRef)MDQueryGetResultAtIndex(q,i);
-                NSString *p=CFBridgingRelease(MDItemCopyAttribute(item,kMDItemPath));
-                if(p.length) hints.emplace_back(p.fileSystemRepresentation);
-            }
+    if (!q) return;
+    if (!stop && MDQueryExecute(q,0)) {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+        while (!stop && !MDQueryIsGatheringComplete(q) && std::chrono::steady_clock::now() < deadline)
+            CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.05, true);
+        MDQueryStop(q);
+        for(CFIndex i=0;i<MDQueryGetResultCount(q) && !stop;++i) {
+            MDItemRef item=(MDItemRef)MDQueryGetResultAtIndex(q,i);
+            NSString *p=CFBridgingRelease(MDItemCopyAttribute(item,kMDItemPath));
+            if(p.length) hints.emplace_back(p.fileSystemRepresentation);
         }
-        CFRelease(q);
     }
+    CFRelease(q);
+}
+
+std::vector<Path> transfer::locate(const GameAdapter& game,const std::atomic_bool& stop) {
+    std::vector<Path> hints;
+    addSteamHints(game,special(NSApplicationSupportDirectory)/"Steam",hints,stop);
+    auto installed=discover(game,hints,{},{},stop);
+    if(stop || !installed.empty()) return installed;
+    hints.clear();
+
+    Path home=NSHomeDirectory().fileSystemRepresentation;
     std::vector<Path> common{"/Applications",home/"Applications",home/"Games",
         special(NSDesktopDirectory),special(NSDownloadsDirectory),special(NSDocumentDirectory)};
+    for (const auto& parent : common) addMacAppHints(game, parent, hints);
+    for(const auto& identifier:game.info.macBundleIds) {
+        if(stop) return {};
+        for(NSURL *u in [NSWorkspace.sharedWorkspace URLsForApplicationsWithBundleIdentifier:str(identifier)])
+            hints.push_back(path(u));
+    }
+    installed=discover(game,hints,{},{},stop);
+    if(stop || !installed.empty()) return installed;
+    hints.clear();
+
     std::vector<Path> volumes{home,"/Users/Shared","/opt","/usr/local","/"};
     for(NSURL *u in [NSFileManager.defaultManager mountedVolumeURLsIncludingResourceValuesForKeys:@[NSURLVolumeIsLocalKey]
                                       options:NSVolumeEnumerationSkipHiddenVolumes]) {
+        if(stop) return {};
         NSNumber *local=nil;[u getResourceValue:&local forKey:NSURLVolumeIsLocalKey error:nil];
         auto p=path(u);
         if(local.boolValue && p.parent_path()=="/Volumes") {
-            common.push_back(p/"Games");common.push_back(p/"Applications");volumes.insert(volumes.begin(),p);
+            for (const auto& folder : {"SteamLibrary", "Steam"}) addSteamHints(game,p/folder,hints,stop);
+            for (const auto& folder : {"Games", "Applications"}) {
+                common.push_back(p/folder);
+                addMacAppHints(game,p/folder,hints);
+            }
+            addMacAppHints(game,p,hints);
+            volumes.insert(volumes.begin(),p);
         }
     }
+    installed=discover(game,hints,{},{},stop);
+    if(stop || !installed.empty()) return installed;
+    hints.clear();
+
+    for(const auto& parent : common) {
+        if(stop) return {};
+        addMacDownloadHints(game,parent,hints,stop);
+    }
+    hints.push_back(path(NSBundle.mainBundle.bundleURL).parent_path());
+    installed=discover(game,hints,{},{},stop);
+    if(stop || !installed.empty()) return installed;
+    hints.clear();
+
+    addSpotlightHints(game,hints,stop);
     return discover(game,hints,common,volumes,stop);
 }

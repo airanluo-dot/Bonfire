@@ -31,34 +31,65 @@ void shortcuts(const Path& folder,std::vector<Path>& hints,int maxDepth,const Pa
         }
     }
 }
-static Path steamInstall() {
+static Path steamRegistryPath(HKEY hive,const wchar_t* field,DWORD view=0) {
     wchar_t value[32768]{};
     DWORD bytes=sizeof(value);
-    if(RegGetValueW(HKEY_CURRENT_USER,L"Software\\Valve\\Steam",L"SteamPath",RRF_RT_REG_SZ,
-                    nullptr,value,&bytes)==ERROR_SUCCESS && value[0]) return Path(value);
-    auto programs=known(FOLDERID_ProgramFilesX86);
-    return programs.empty() ? Path{} : programs/L"Steam";
+    if(RegGetValueW(hive,L"Software\\Valve\\Steam",field,RRF_RT_REG_SZ | view,
+                    nullptr,value,&bytes)!=ERROR_SUCCESS) return {};
+    Path result(value);
+    return result.is_absolute() ? result : Path{};
 }
 #pragma comment(lib, "advapi32.lib")
 std::vector<Path> transfer::locate(const GameAdapter& game,const std::atomic_bool& cancelScan) {
+    std::vector<Path> hints,common,volumes;
+    std::vector<Path> steamRoots;
+    auto steamHints=[&](Path candidate) {
+        if(cancelScan || candidate.empty()) return;
+        candidate = candidate.lexically_normal().make_preferred();
+        for(const auto& seen : steamRoots)
+            if(!_wcsicmp(candidate.c_str(),seen.c_str())) return;
+        steamRoots.push_back(candidate);
+        std::error_code ec;
+        if(fs::is_directory(candidate/L"steamapps",ec)) addSteamHints(game,candidate,hints,cancelScan);
+    };
+    steamHints(steamRegistryPath(HKEY_CURRENT_USER,L"SteamPath"));
+    steamHints(steamRegistryPath(HKEY_LOCAL_MACHINE,L"InstallPath",RRF_SUBKEY_WOW6432KEY));
+    steamHints(steamRegistryPath(HKEY_LOCAL_MACHINE,L"InstallPath",RRF_SUBKEY_WOW6464KEY));
+    auto registered=discover(game,hints,{}, {},cancelScan);
+    if(!registered.empty() || cancelScan) return registered;
+    hints.clear();
+
+    // A portable Steam client or a library left after moving Steam may have no
+    // registry entry. Check its usual locations on each fixed disk directly.
+    auto programs=known(FOLDERID_ProgramFilesX86);
+    if(!programs.empty()) steamHints(programs/L"Steam");
+    DWORD drives=GetLogicalDrives();
+    for(unsigned i=0;i<26;++i) if(drives&(1u<<i)) {
+        wchar_t letter[]=L"A:\\";letter[0]+=static_cast<wchar_t>(i);
+        auto kind=GetDriveTypeW(letter);
+        if(kind!=DRIVE_FIXED && kind!=DRIVE_REMOVABLE) continue;
+        Path drive(letter);
+        volumes.push_back(drive);
+        if(kind==DRIVE_FIXED) {
+            for(auto folder:{L"SteamLibrary",L"Steam",L"Program Files (x86)\\Steam",L"Program Files\\Steam",L"Games\\Steam"})
+                steamHints(drive/folder);
+        }
+    }
+    auto conventional=discover(game,hints,{}, {},cancelScan);
+    if(!conventional.empty() || cancelScan) return conventional;
+    hints.clear();
+
     auto hr=CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED);
     struct Apartment {HRESULT hr; ~Apartment(){if(SUCCEEDED(hr))CoUninitialize();}} apartment{hr};
     {
-        std::vector<Path> hints,common,volumes;
         wchar_t exe[32768]{}; GetModuleFileNameW(nullptr,exe,32768);
         hints.push_back(Path(exe).parent_path());
-        addSteamHints(game,steamInstall(),hints,cancelScan);
         auto exeName=fs::u8path(game.info.windowsExe);
         shortcuts(known(FOLDERID_Desktop),hints,1,exeName,cancelScan);
         shortcuts(known(FOLDERID_PublicDesktop),hints,0,exeName,cancelScan);
         shortcuts(known(FOLDERID_Programs),hints,4,exeName,cancelScan);
         shortcuts(known(FOLDERID_CommonPrograms),hints,4,exeName,cancelScan);
-        DWORD drives=GetLogicalDrives();
-        for(unsigned i=0;i<26;++i) if(drives&(1u<<i)) {
-            wchar_t letter[]=L"A:\\";letter[0]+=static_cast<wchar_t>(i);
-            auto kind=GetDriveTypeW(letter);
-            if(kind!=DRIVE_FIXED && kind!=DRIVE_REMOVABLE) continue;
-            Path drive(letter); volumes.push_back(drive);
+        for(const auto& drive:volumes) {
             for(auto name:{L"Game",L"Games",L"游戏"}) {
                 auto p=drive/name; common.push_back(p); hints.push_back(p);
                 for(const auto& folder:game.info.folderNames) hints.push_back(p/fs::u8path(folder));

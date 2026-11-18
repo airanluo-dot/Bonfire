@@ -158,10 +158,11 @@ Files RenpyAdapter::capture(const Path& root) const {
     return result;
 }
 
-Progress RenpyAdapter::inventory(const Path& root) const { return renpyProgress(capture(root)); }
+Progress RenpyAdapter::summarize(const Files& files) const { return renpyProgress(files); }
+Progress RenpyAdapter::inventory(const Path& root) const { return summarize(capture(root)); }
 Progress RenpyAdapter::validate(const Files& files) const {
     if (files.empty()) throw Error("Renpy_Empty");
-    return renpyProgress(files);
+    return summarize(files);
 }
 void RenpyAdapter::install(const Path& root, const Files& files) const {
     auto dirs = saveDirectories(root);

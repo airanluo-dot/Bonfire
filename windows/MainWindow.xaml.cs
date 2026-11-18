@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+using System.Globalization;
 using System.Text.Json.Nodes;
 using Windows.Storage.Pickers;
 using Microsoft.UI.Windowing;
@@ -117,10 +118,20 @@ public sealed partial class MainWindow : Window {
     string Progress(JsonNode p,bool found) {
         var count=p["count"]!.GetValue<int>();
         if(count==0)return T(p["persistent"]!.GetValue<bool>()?"PersistentOnly":"NoneProgress");
-        var summary=T("OneProgress");var time=p["playtime"]!.ToString();
-        var label=count>1 && time.Length>0?T("SlotPlaytime",p["slot"]!.ToString()):T("Playtime");
-        var prefix=(found?T("Found",summary):summary);
-        return T("ProgressLine",prefix,T("LabelValue",label,time.Length>0?time:T("Unknown")));
+        var summary=count==1?T("OneProgress"):T("ManyProgress",count);
+        if(found)summary=T("Found",summary);
+        var chapter=p["chapterKey"]?.ToString();
+        if(!string.IsNullOrEmpty(chapter))
+            summary=T("ProgressLine",summary,T("LabelValue",T("SaveChapter"),T(chapter)));
+        var time=p["playtime"]?.ToString();
+        if(!string.IsNullOrEmpty(time)){
+            var label=count>1?T("SlotPlaytime",p["slot"]!.ToString()):T("Playtime");
+            return T("ProgressLine",summary,T("LabelValue",label,time));
+        }
+        if(DateTime.TryParseExact(p["savedLocalTime"]?.ToString(),"yyyy-MM-dd HH:mm",
+                                 CultureInfo.InvariantCulture,DateTimeStyles.None,out var saved))
+            return T("ProgressLine",summary,T("LabelValue",T("LastSaveLabel"),saved.ToString("g",strings.Culture)));
+        return summary;
     }
     void Workspace(string message="") {
         HeaderFor(GameName(game));
@@ -236,7 +247,7 @@ public sealed partial class MainWindow : Window {
             var card=Group(page,record!["name"]!.ToString());
             var created=record["created"]!.GetValue<long>();var p=record["progress"]!;
             card.Children.Add(Text(T("LabelValue",T("Generated"),created>0?DateTimeOffset.FromUnixTimeMilliseconds(created).LocalDateTime.ToString("G",strings.Culture):T("NoTime"))));
-            var time=p["playtime"]!.ToString();card.Children.Add(Text(T("LabelValue",T("Playtime"),time.Length>0?time:T("Unknown"))));
+            card.Children.Add(Text(Progress(p,false)));
             ToolTipService.SetToolTip(card,record["path"]!.ToString());
         }
     }
@@ -253,6 +264,6 @@ public sealed partial class MainWindow : Window {
         var visible=Group(page,T("VisibleGames"));
         foreach(var entry in games){var id=entry!["id"]!.ToString();var box=new CheckBox{Content=GameName(id),IsChecked=!prefs.Hidden.Contains(id)};
             box.Click+=(_,_)=>{if(box.IsChecked==true)prefs.Hidden.Remove(id);else prefs.Hidden.Add(id);SaveSettings();};visible.Children.Add(box);}
-        updateGroup=Group(page,T("Updates"));ShowUpdateControls();page.Children.Add(status);Body(page);
+        updateGroup=Group(page,T("Updates"));BuildUpdateControls(updateGroup);page.Children.Add(status);Body(page);
     }
 }

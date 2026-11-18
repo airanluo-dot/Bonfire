@@ -17,6 +17,7 @@ public:
     void install(const Path& root, const Files& files) const override;
 protected:
     Path dataRoot(const Path& installation) const;
+    virtual Progress summarize(const Files& files) const;
 private:
     const std::string profile;
     const bool supportsSaveOverride;

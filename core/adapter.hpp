@@ -24,6 +24,8 @@ struct Progress {
     size_t slot=0;
     bool persistent=false;
     std::string slotName;
+    std::string savedLocalTime;
+    std::string chapterKey;
 };
 
 struct GameInfo {

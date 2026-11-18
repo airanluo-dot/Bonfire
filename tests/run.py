@@ -66,6 +66,12 @@ if __name__ == "__main__":
         check(executable, game, work)
         from updates import check as check_updates
         check_updates(executable)
+        if sys.platform == "win32":
+            project = ROOT / "tests/windows_updates/WindowsUpdates.csproj"
+            output = work / "windows-updater"
+            subprocess.run(["dotnet", "build", project, "-c", "Release", "--artifacts-path",
+                            work / "managed-artifacts", "-o", output, "--nologo"], check=True)
+            subprocess.run([output / "WindowsUpdates.exe", executable, work / "downloads"], check=True)
         from renpy import check as check_renpy
         check_renpy(executable, work)
         from renpy_format import check as check_renpy_format

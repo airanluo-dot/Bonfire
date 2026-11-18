@@ -12,7 +12,8 @@
 namespace transfer {
 static Json progress(const Progress& p) {
     return {{"count",p.count},{"playtime",p.playtime},{"slot",p.slotName.empty()?Json(p.slot):Json(p.slotName)},
-        {"persistent",p.persistent},{"available",p.count>0 || p.persistent}};
+        {"persistent",p.persistent},{"available",p.count>0 || p.persistent},
+        {"savedLocalTime",p.savedLocalTime},{"chapterKey",p.chapterKey}};
 }
 // v1 retained the local wall-clock timestamp only in its original generated name.
 static int64_t legacyDate(const Path& path) {
@@ -70,6 +71,7 @@ Json request(const Json& in,const std::atomic_bool& stop) {
     auto op=in.at("op").get<std::string>();
     if(op=="updateFeed")return "https://api.github.com/repos/airanluo-dot/Bonfire/releases";
     if(op=="selectUpdate")return selectUpdate(in);
+    if(op=="webUpdate")return webUpdate(in);
     if(op=="catalog") {
         Json list=Json::array();
         for(auto game:catalog()) list.push_back({{"id",game->info.id},{"ext",game->info.extension}});

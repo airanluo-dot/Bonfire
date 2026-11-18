@@ -8,6 +8,17 @@ class EmberboundAdapter final : public RenpyAdapter {
 public:
     using RenpyAdapter::RenpyAdapter;
 
+    Progress summarize(const Files& files) const override {
+        nlohmann::json latest;
+        auto progress = renpyProgress(files, {}, {}, {}, &latest);
+        auto chapter = latest.find("emberbound_chapter");
+        if (chapter == latest.end()) return progress;
+        if (*chapter == "part1") progress.chapterKey = "Emberbound_Part1";
+        if (*chapter == "part2") progress.chapterKey = "Emberbound_Part2";
+        if (*chapter == "extra_shengyang_day") progress.chapterKey = "Emberbound_ShengyangDay";
+        return progress;
+    }
+
     void checkCompatibility(const Path& root, const Files& files) const override {
         bool needsSideStory = false;
         renpyProgress(files, {}, {}, [&](const nlohmann::json& metadata) {

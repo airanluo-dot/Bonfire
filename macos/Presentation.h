@@ -4,6 +4,7 @@
 @property(nonatomic,readonly) NSLocale *locale;
 - (void)setLanguage:(NSString*)tag;
 - (NSString*)text:(NSString*)key arguments:(NSArray*)arguments;
+- (NSString*)progressSummary:(NSDictionary*)progress found:(BOOL)found;
 @end
 
 @interface BFPrefs : NSObject

@@ -122,7 +122,7 @@ double number(const nlohmann::json& object, const char* key) {
 }
 
 Slot readSlot(const Bytes& bytes, size_t& budget, const RenpyLogVisitor& visitLog,
-              const RenpyMetadataVisitor& visitMetadata) {
+              const RenpyMetadataVisitor& visitMetadata, nlohmann::json* slotMetadata) {
     // Python's ZipFile writer creates seekable, single-disk archives with no
     // archive comment. Each directory record points to a matching local header.
     extent(0, 22, bytes.size());
@@ -184,6 +184,7 @@ Slot readSlot(const Bytes& bytes, size_t& budget, const RenpyLogVisitor& visitLo
             if (visitMetadata) visitMetadata(metadata);
             slot.created = number(metadata, "_ctime");
             slot.seconds = number(metadata, "_game_runtime");
+            if (slotMetadata) *slotMetadata = std::move(metadata);
         } else if (name == "renpy_version") {
             if (std::string_view(reinterpret_cast<const char*>(plain.data()), plain.size()).substr(0, 7) != "Ren'Py ") invalid();
         }
@@ -200,6 +201,20 @@ std::string duration(double value) {
     const auto seconds = static_cast<unsigned long long>(value);
     char text[32];
     std::snprintf(text, sizeof(text), "%02llu:%02llu:%02llu", seconds / 3600, (seconds / 60) % 60, seconds % 60);
+    return text;
+}
+
+// Older Ren'Py releases only timestamp ZIP members, using the source device's local clock.
+std::string localSaveTime(uint32_t stamp) {
+    const unsigned year = 1980 + (stamp >> 25), month = (stamp >> 21) & 15, day = (stamp >> 16) & 31;
+    const unsigned hour = (stamp >> 11) & 31, minute = (stamp >> 5) & 63;
+    const bool leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    const unsigned days[] = {0,31,leap ? 29u : 28u,31,30,31,30,31,31,30,31,30,31};
+    if (month == 0 || month > 12 || day == 0 || day > days[month] || hour > 23 || minute > 59) return {};
+    // ZIP writers also use the DOS epoch for entries without a creation time.
+    if (year == 1980 && month == 1 && day == 1 && hour == 0 && minute == 0) return {};
+    char text[24];
+    std::snprintf(text, sizeof(text), "%04u-%02u-%02u %02u:%02u", year, month, day, hour, minute);
     return text;
 }
 }
@@ -223,7 +238,7 @@ bool renpySignedPersistent(const Files& files) {
 }
 
 Progress renpyProgress(const Files& files, const RenpyLogVisitor& visitLog, std::string_view packageMetadata,
-                       const RenpyMetadataVisitor& visitMetadata) {
+                       const RenpyMetadataVisitor& visitMetadata, nlohmann::json* latestMetadata) {
     Progress result;
     Slot latest;
     // Bound total work as well as individual allocations for compressed saves.
@@ -236,16 +251,19 @@ Progress renpyProgress(const Files& files, const RenpyLogVisitor& visitLog, std:
             result.persistent = true;
             continue;
         }
-        auto slot = readSlot(bytes, budget, visitLog, visitMetadata);
+        nlohmann::json metadata;
+        auto slot = readSlot(bytes, budget, visitLog, visitMetadata, latestMetadata ? &metadata : nullptr);
         const bool newer = slot.created >= 0 && latest.created >= 0
             ? slot.created > latest.created : slot.dosTime > latest.dosTime;
         if (!result.count || newer) {
             latest = slot;
+            if (latestMetadata) *latestMetadata = std::move(metadata);
             result.slotName = name.substr(0, name.size() - suffix.size());
         }
         ++result.count;
     }
     result.playtime = duration(latest.seconds);
+    result.savedLocalTime = localSaveTime(latest.dosTime);
     return result;
 }
 }

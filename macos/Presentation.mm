@@ -23,6 +23,43 @@
     }
     return output;
 }
+- (NSString*)progressSummary:(NSDictionary*)progress found:(BOOL)found {
+    NSInteger count=[progress[@"count"] integerValue];
+    if(!count) return [self text:[progress[@"persistent"] boolValue]?@"PersistentOnly":@"NoneProgress" arguments:@[]];
+
+    NSString *summary=count==1?[self text:@"OneProgress" arguments:@[]]:[self text:@"ManyProgress" arguments:@[@(count)]];
+    if(found) summary=[self text:@"Found" arguments:@[summary]];
+    NSString *chapterKey=progress[@"chapterKey"];
+    if(chapterKey.length){
+        NSString *chapter=[self text:chapterKey arguments:@[]];
+        NSString *detail=[self text:@"LabelValue" arguments:@[[self text:@"SaveChapter" arguments:@[]],chapter]];
+        summary=[self text:@"ProgressLine" arguments:@[summary,detail]];
+    }
+    NSString *playtime=progress[@"playtime"], *saved=progress[@"savedLocalTime"];
+    if(!playtime.length && !saved.length) return summary;
+    NSString *label=[self text:playtime.length?@"Playtime":@"LastSaveLabel" arguments:@[]];
+    id slot=progress[@"slot"];
+    if(playtime.length && count>1 && ([slot isKindOfClass:NSNumber.class] || ([slot isKindOfClass:NSString.class] && [slot length])))
+        label=[self text:@"SlotPlaytime" arguments:@[slot]];
+    NSString *value=playtime;
+    if(!playtime.length){
+        // The game's timestamp has no time zone. Format the same clock reading in the chosen UI language.
+        NSDateFormatter *date=[NSDateFormatter new];
+        date.locale=[NSLocale localeWithLocaleIdentifier:@"en_US_POSIX"];
+        date.timeZone=[NSTimeZone timeZoneForSecondsFromGMT:0];
+        date.dateFormat=@"yyyy-MM-dd HH:mm";
+        NSDate *stamp=[date dateFromString:saved];
+        if(!stamp || ![[date stringFromDate:stamp] isEqual:saved]) return summary;
+        NSDateFormatter *display=[NSDateFormatter new];
+        display.locale=self.locale;
+        display.timeZone=date.timeZone;
+        display.dateStyle=NSDateFormatterShortStyle;
+        display.timeStyle=NSDateFormatterShortStyle;
+        value=[display stringFromDate:stamp];
+    }
+    NSString *detail=[self text:@"LabelValue" arguments:@[label,value]];
+    return [self text:@"ProgressLine" arguments:@[summary,detail]];
+}
 @end
 @implementation BFPrefs
 - (instancetype)init {

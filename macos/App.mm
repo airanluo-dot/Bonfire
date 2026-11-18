@@ -47,6 +47,8 @@ static NSDictionary *call(NSDictionary *input,Stop stop){
     Stop _screen;
     BFUpdates *_updates;
     NSStackView *_updateGroup;
+    NSProgressIndicator *_updateProgress;
+    NSTextField *_updatePercent;
 }
 - (NSString*)t:(NSString*)key {return [_strings text:key arguments:@[]];}
 - (NSString*)format:(NSString*)key arg:(id)arg {return [_strings text:key arguments:@[arg]];}
@@ -69,6 +71,7 @@ static NSDictionary *call(NSDictionary *input,Stop stop){
     _updates=[[BFUpdates alloc] initWithPreferences:_prefs];
     __weak Bonfire *weakSelf=self;
     _updates.changed=^{[weakSelf showUpdates];};
+    _updates.progressChanged=^{[weakSelf showDownloadProgress];};
     _updates.canInstall=^BOOL{Bonfire *owner=weakSelf;return owner && !owner->_writing;};
     if(_prefs.autoCheck)[_updates check];
 }
@@ -127,7 +130,7 @@ static NSDictionary *call(NSDictionary *input,Stop stop){
     [_navigation reloadData];[_window.toolbar validateVisibleItems];if(settings)[self settings];else [self library];
 }
 - (void)startPage:(NSString*)title {
-    _updateGroup=nil;
+    _updateGroup=nil;_updateProgress=nil;_updatePercent=nil;
     NSView *view=_content.view;
     for(NSView *old in view.subviews.copy)[old removeFromSuperview];
     NSScrollView *scroll=[NSScrollView new];scroll.drawsBackground=NO;scroll.hasVerticalScroller=YES;scroll.autohidesScrollers=YES;
@@ -170,14 +173,6 @@ static NSDictionary *call(NSDictionary *input,Stop stop){
         });
     }});
 }
-- (NSString*)summary:(NSDictionary*)p found:(BOOL)found {
-    NSInteger count=[p[@"count"] integerValue];
-    if(!count)return [self t:[p[@"persistent"] boolValue]?@"PersistentOnly":@"NoneProgress"];
-    NSString *one=[self t:@"OneProgress"];
-    NSString *time=[p[@"playtime"] length]?p[@"playtime"]:[self t:@"Unknown"];
-    NSString *label=count>1 && [p[@"playtime"] length]?[self format:@"SlotPlaytime" arg:p[@"slot"]]:[self t:@"Playtime"];
-    return [_strings text:@"ProgressLine" arguments:@[found?[self format:@"Found" arg:one]:one,[_strings text:@"LabelValue" arguments:@[label,time]]]];
-}
 - (NSStackView*)group:(NSString*)key {
     NSBox *box=[NSBox new];box.titlePosition=NSNoTitle;box.boxType=NSBoxPrimary;NSView *inside=[NSView new];box.contentView=inside;
     NSStackView *stack=BFStack(NSUserInterfaceLayoutOrientationVertical,8);stack.translatesAutoresizingMaskIntoConstraints=NO;[inside addSubview:stack];
@@ -197,14 +192,14 @@ static NSDictionary *call(NSDictionary *input,Stop stop){
     NSStackView *buttons=BFStack(NSUserInterfaceLayoutOrientationHorizontal,8);[location addArrangedSubview:buttons];
     [buttons addArrangedSubview:BFButton([self t:@"Locate"],^{[self find:nil];})];[buttons addArrangedSubview:BFButton([self t:@"ChooseInstall"],^{[self pick:YES game:YES done:^(NSString *p){[self find:p];}];})];
     if(!_receiving){
-        if(_inventory)[location addArrangedSubview:BFLabel([self summary:_inventory found:YES],14,NSFontWeightMedium)];
+        if(_inventory)BFFillWidth(location,BFLabel([_strings progressSummary:_inventory found:YES],14,NSFontWeightMedium));
         NSStackView *target=[self group:@"SaveTo"];[target addArrangedSubview:BFLabel(_folder,13,NSFontWeightRegular)];
         [target addArrangedSubview:BFButton([self t:@"ChooseFolder"],^{[self pick:YES game:NO done:^(NSString *p){self->_folder=p;[self workspace:@""];}];})];
     }else{
         NSStackView *file=[self group:@"Package"];[file addArrangedSubview:BFLabel(_package.length?_package:[self t:@"NotSelected"],13,NSFontWeightRegular)];
         [file addArrangedSubview:BFButton([self t:@"ChooseFile"],^{[self pick:NO game:NO done:^(NSString *p){[self preview:p];}];})];
         if(_preview){
-            [file addArrangedSubview:BFLabel([self summary:_preview[@"progress"] found:NO],14,NSFontWeightMedium)];
+            BFFillWidth(file,BFLabel([_strings progressSummary:_preview[@"progress"] found:NO],14,NSFontWeightMedium));
             for(NSString *key in _preview[@"notices"]) BFFillWidth(file,BFLabel([self t:key],13,NSFontWeightRegular));
             if([_preview[@"blocking"] isKindOfClass:NSDictionary.class]){
                 NSDictionary *issue=_preview[@"blocking"];
@@ -255,7 +250,8 @@ static NSDictionary *call(NSDictionary *input,Stop stop){
     NSDictionary *op=_receiving?@{@"op":@"import",@"root":_install[@"root"],@"path":_package,@"checksum":_checksum}:@{@"op":@"export",@"root":_install[@"root"],@"folder":_folder,@"title":[self name:_game]};
     [self perform:op done:^(id result){
         self->_writing=NO;for(NSControl *control in enabled)control.enabled=YES;
-        [self->_window.toolbar validateVisibleItems];if(!result)return;
+        [self->_window.toolbar validateVisibleItems];
+        if(!result){[self->_updates applyAutomaticIfReady];return;}
         NSString *folder=self->_receiving?self->_package.stringByDeletingLastPathComponent:self->_folder;
         [self->_prefs.folders addObject:folder];[self->_prefs save];
         NSString *success=self->_receiving?[self t:@"Imported"]:[self format:@"Exported" arg:result];
@@ -280,10 +276,10 @@ static NSDictionary *call(NSDictionary *input,Stop stop){
         NSDateFormatter *date=[NSDateFormatter new];date.locale=self->_strings.locale;date.dateStyle=NSDateFormatterMediumStyle;date.timeStyle=NSDateFormatterMediumStyle;
         for(NSDictionary *row in rows){
             int64_t ms=[row[@"created"] longLongValue];NSString *stamp=ms?[date stringFromDate:[NSDate dateWithTimeIntervalSince1970:ms/1000.0]]:[self t:@"NoTime"];
-            NSStackView *group=BFStack(NSUserInterfaceLayoutOrientationVertical,4);[self->_page addArrangedSubview:group];
+            NSStackView *group=BFStack(NSUserInterfaceLayoutOrientationVertical,4);BFFillWidth(self->_page,group);
             [group addArrangedSubview:BFLabel(row[@"name"],14,NSFontWeightSemibold)];group.toolTip=row[@"path"];
             [group addArrangedSubview:BFLabel([self->_strings text:@"LabelValue" arguments:@[[self t:@"Generated"],stamp]],13,NSFontWeightRegular)];
-            NSString *time=row[@"progress"][@"playtime"];[group addArrangedSubview:BFLabel([self->_strings text:@"LabelValue" arguments:@[[self t:@"Playtime"],time.length?time:[self t:@"Unknown"]]],13,NSFontWeightRegular)];
+            BFFillWidth(group,BFLabel([self->_strings progressSummary:row[@"progress"] found:NO],13,NSFontWeightRegular));
         }
     }];
 }
@@ -311,43 +307,82 @@ static NSDictionary *call(NSDictionary *input,Stop stop){
 }
 - (void)showUpdates {
     if(![_section isEqual:@"settings"]||!_updateGroup)return;
+    _updateProgress=nil;_updatePercent=nil;
     for(NSView *view in _updateGroup.arrangedSubviews.copy)[view removeFromSuperview];
     [_updateGroup addArrangedSubview:BFLabel([self t:@"Updates"],14,NSFontWeightSemibold)];
+    NSString *mode=[self t:_updates.installed?@"Installed":@"Portable"];
+    [_updateGroup addArrangedSubview:BFLabel([_strings text:@"UpdateBuild" arguments:@[BFUpdates.version,mode]],13,NSFontWeightMedium)];
+    NSString *status=[_updates.status isEqual:@"UpdateAvailable"]?[self format:@"UpdateAvailable" arg:_updates.candidate[@"version"]]:
+        [_strings text:_updates.status arguments:_updates.statusArguments];
+    [_updateGroup addArrangedSubview:BFLabel(status,13,NSFontWeightRegular)];
+    if(_updates.retryAfter){
+        NSDateFormatter *date=[NSDateFormatter new];date.locale=_strings.locale;
+        date.dateStyle=NSDateFormatterShortStyle;date.timeStyle=NSDateFormatterShortStyle;
+        [_updateGroup addArrangedSubview:BFLabel([self format:@"UpdateRetryAt" arg:[date stringFromDate:_updates.retryAfter]],12,NSFontWeightRegular)];
+    }
+    if([_updates.status isEqual:@"UpdateDownloading"]){
+        NSStackView *row=BFStack(NSUserInterfaceLayoutOrientationHorizontal,8);
+        _updateProgress=[NSProgressIndicator new];_updateProgress.indeterminate=NO;
+        _updateProgress.minValue=0;_updateProgress.maxValue=100;
+        _updateProgress.accessibilityLabel=[self t:@"UpdateDownload"];
+        [_updateProgress.widthAnchor constraintEqualToConstant:160].active=YES;
+        _updatePercent=BFLabel(@"",12,NSFontWeightRegular);
+        [row addArrangedSubview:_updateProgress];[row addArrangedSubview:_updatePercent];
+        [_updateGroup addArrangedSubview:row];[self showDownloadProgress];
+    }
+    if(_prefs.lastCheck){
+        NSDateFormatter *date=[NSDateFormatter new];date.locale=_strings.locale;date.dateStyle=NSDateFormatterShortStyle;date.timeStyle=NSDateFormatterShortStyle;
+        [_updateGroup addArrangedSubview:BFLabel([self format:@"UpdateLast" arg:[date stringFromDate:_prefs.lastCheck]],12,NSFontWeightRegular)];
+    }
+    [self showUpdateActions];
+    [_updateGroup addArrangedSubview:BFLabel([self t:@"UpdateChannel"],13,NSFontWeightMedium)];
+    NSPopUpButton *channel=[NSPopUpButton new];[channel addItemsWithTitles:@[[self t:@"Stable"],[self t:@"Beta"]]];
+    [channel selectItemAtIndex:[_prefs.channel isEqual:@"Beta"]?1:0];channel.target=self;channel.action=@selector(updateChannel:);
+    channel.enabled=!_updates.installing&&!_updates.needsReopen;[_updateGroup addArrangedSubview:channel];
+    channel.toolTip=[self t:@"UpdateChannelsHelp"];
     NSArray *keys=@[@"UpdateAutoCheck",@"UpdateAutoDownload",@"UpdateAutoInstall"];
     NSArray *properties=@[@"autoCheck",@"autoDownload",@"autoInstall"];
     for(NSUInteger i=0;i<keys.count;++i){
         NSButton *toggle=[NSButton checkboxWithTitle:[self t:keys[i]] target:self action:@selector(updateToggle:)];
         toggle.identifier=properties[i];toggle.state=[[_prefs valueForKey:properties[i]] boolValue]?NSControlStateValueOn:NSControlStateValueOff;
+        toggle.enabled=!_updates.installing&&!_updates.needsReopen;
         [_updateGroup addArrangedSubview:toggle];
     }
-    [_updateGroup addArrangedSubview:BFLabel([self t:@"UpdateChannel"],13,NSFontWeightMedium)];
-    NSPopUpButton *channel=[NSPopUpButton new];[channel addItemsWithTitles:@[[self t:@"Stable"],[self t:@"Beta"]]];
-    [channel selectItemAtIndex:[_prefs.channel isEqual:@"Beta"]?1:0];channel.target=self;channel.action=@selector(updateChannel:);
-    channel.enabled=!_updates.installing;[_updateGroup addArrangedSubview:channel];
-    [_updateGroup addArrangedSubview:BFLabel([self t:@"UpdateChannelsHelp"],13,NSFontWeightRegular)];
-    NSString *mode=[self t:_updates.installed?@"Installed":@"Portable"];
-    [_updateGroup addArrangedSubview:BFLabel([_strings text:@"UpdateBuild" arguments:@[BFUpdates.version,mode]],13,NSFontWeightMedium)];
-    NSString *status=[_updates.status isEqual:@"UpdateAvailable"]?[self format:@"UpdateAvailable" arg:_updates.candidate[@"version"]]:[self t:_updates.status];
-    [_updateGroup addArrangedSubview:BFLabel(status,13,NSFontWeightRegular)];
-    if(_prefs.lastCheck){
-        NSDateFormatter *date=[NSDateFormatter new];date.locale=_strings.locale;date.dateStyle=NSDateFormatterShortStyle;date.timeStyle=NSDateFormatterShortStyle;
-        [_updateGroup addArrangedSubview:BFLabel([self format:@"UpdateLast" arg:[date stringFromDate:_prefs.lastCheck]],12,NSFontWeightRegular)];
-    }
+}
+- (void)showUpdateActions {
     NSStackView *buttons=BFStack(NSUserInterfaceLayoutOrientationHorizontal,8);[_updateGroup addArrangedSubview:buttons];
-    NSButton *check=BFButton([self t:@"UpdateCheck"],^{[self->_updates check];});check.enabled=!_updates.busy;[buttons addArrangedSubview:check];
+    if(_updates.canCancel){
+        [buttons addArrangedSubview:BFButton([self t:@"UpdateCancel"],^{[self->_updates cancel];})];
+        return;
+    }
+    if(_updates.busy||_updates.installing||_updates.needsReopen)return;
+    NSString *checkKey=[_updates.retryAction isEqual:@"check"]?@"UpdateRetry":@"UpdateCheck";
+    NSButton *check=BFButton([self t:checkKey],^{[self->_updates check];});[buttons addArrangedSubview:check];
     if(!_updates.busy&&_updates.candidate){
-        if(!_updates.download)[buttons addArrangedSubview:BFButton([self t:@"UpdateDownload"],^{[self->_updates downloadUpdate];})];
+        if(!_updates.download){
+            NSString *key=[_updates.retryAction isEqual:@"download"]?@"UpdateRetry":@"UpdateDownload";
+            [buttons addArrangedSubview:BFButton([self t:key],^{[self->_updates downloadUpdate];})];
+        }
         else{
-            [buttons addArrangedSubview:BFButton([self t:@"UpdateInstall"],^{[self->_updates install];})];
+            if(![_updates.status isEqual:@"UpdateManualMac"]&&![_updates.status isEqual:@"UpdateWait"]){
+                NSString *key=[_updates.retryAction isEqual:@"install"]?@"UpdateRetry":@"UpdateInstall";
+                [buttons addArrangedSubview:BFButton([self t:key],^{[self->_updates install];})];
+            }
             [buttons addArrangedSubview:BFButton([self t:@"UpdateShow"],^{[self->_updates reveal];})];
         }
     }
 }
+- (void)showDownloadProgress {
+    if(!_updateProgress)return;
+    _updateProgress.doubleValue=_updates.progress;
+    _updatePercent.stringValue=[NSNumberFormatter localizedStringFromNumber:@(_updates.progress/100.0)
+                                                               numberStyle:NSNumberFormatterPercentStyle];
+}
 - (void)updateToggle:(NSButton*)sender {
-    [_prefs setValue:@(sender.state==NSControlStateValueOn) forKey:sender.identifier];[_prefs save];[_updates applyAutomaticIfReady];
+    [_prefs setValue:@(sender.state==NSControlStateValueOn) forKey:sender.identifier];[_prefs save];[_updates preferencesChanged:sender.identifier];
 }
 - (void)updateChannel:(NSPopUpButton*)sender {
-    _prefs.channel=sender.indexOfSelectedItem==1?@"Beta":@"Stable";[_prefs save];[_updates cancel];if(_prefs.autoCheck)[_updates check];
+    _prefs.channel=sender.indexOfSelectedItem==1?@"Beta":@"Stable";[_prefs save];[_updates preferencesChanged:@"channel"];
 }
 
 

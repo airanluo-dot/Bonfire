@@ -24,6 +24,7 @@ jobs:
           ditto "$RUNNER_TEMP/build/Bonfire.app" "$RUNNER_TEMP/update-test/Bonfire.app"
           xcrun clang++ -std=c++17 -fobjc-arc tests/mac_update.mm macos/BundleUpdate.mm -framework Foundation -o "$RUNNER_TEMP/update-test/check"
           "$RUNNER_TEMP/update-test/check" "$(pwd)"/dist/*-Portable.zip "$RUNNER_TEMP/update-test/Bonfire.app" "$(cat VERSION)"
+          sh tests/mac_update_service.sh
       - name: Install and launch the shipped Mac application
         run: |
           sudo installer -pkg dist/*-Installer.pkg -target /
@@ -63,6 +64,8 @@ jobs:
           python tests/run.py --export-cross "%RUNNER_TEMP%\cross-fixtures"
           if errorlevel 1 exit /b 1
           call windows\build.cmd "%RUNNER_TEMP%\build"
+          if errorlevel 1 exit /b 1
+          python tests/windows_discovery.py "%RUNNER_TEMP%\build\BonfireCore.dll"
       - name: Create portable ZIP and bilingual per-user installer
         shell: pwsh
         run: |
