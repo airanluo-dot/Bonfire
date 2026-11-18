@@ -1,0 +1,140 @@
+{
+  "schemaVersion": 1,
+  "releases": [
+    {
+      "tag": "v0.1.0-beta.3",
+      "version": "0.1.0-beta.3",
+      "name": "Bonfire 0.1.0 Beta 3",
+      "channel": "beta",
+      "publishedAt": "2026-11-18T07:41:25Z",
+      "htmlUrl": "https://github.com/airanluo-dot/Bonfire/releases/tag/v0.1.0-beta.3",
+      "summary": "Bonfire 0.1.0 Beta 3 新增 7 款游戏的 Windows 与 Mac 存档互传，加上《兽劳动》，现在共支持 8 款。",
+      "platforms": {
+        "windows": {
+          "installer": {
+            "name": "Bonfire-0.1.0-beta.3-Windows-x64-Setup.exe",
+            "url": "https://github.com/airanluo-dot/Bonfire/releases/download/v0.1.0-beta.3/Bonfire-0.1.0-beta.3-Windows-x64-Setup.exe",
+            "size": 65608045,
+            "sha256": "86547aeab549397257b9e34bf0077d07b86ef4363840463cf86acdb5af376d0a"
+          },
+          "portable": {
+            "name": "Bonfire-0.1.0-beta.3-Windows-x64-Portable.zip",
+            "url": "https://github.com/airanluo-dot/Bonfire/releases/download/v0.1.0-beta.3/Bonfire-0.1.0-beta.3-Windows-x64-Portable.zip",
+            "size": 93741294,
+            "sha256": "d427a4777e0e1eb7f60fc04f83ff7331ab66460894841911a1f0173cc1971196"
+          }
+        },
+        "macos": {
+          "installer": {
+            "name": "Bonfire-0.1.0-beta.3-macOS-arm64-Installer.pkg",
+            "url": "https://github.com/airanluo-dot/Bonfire/releases/download/v0.1.0-beta.3/Bonfire-0.1.0-beta.3-macOS-arm64-Installer.pkg",
+            "size": 910608,
+            "sha256": "44ceadbb10399d601a89b4ca0c93312f3ed2fef879edcd4f2b83b5ff4d255691"
+          },
+          "portable": {
+            "name": "Bonfire-0.1.0-beta.3-macOS-arm64-Portable.zip",
+            "url": "https://github.com/airanluo-dot/Bonfire/releases/download/v0.1.0-beta.3/Bonfire-0.1.0-beta.3-macOS-arm64-Portable.zip",
+            "size": 911056,
+            "sha256": "b08df9e6ea4b3851cfe3bd7f5605e3a2df3b0d94be7e91baca0b91c418322a98"
+          }
+        }
+      },
+      "checksums": {
+        "name": "SHA256SUMS.txt",
+        "url": "https://github.com/airanluo-dot/Bonfire/releases/download/v0.1.0-beta.3/SHA256SUMS.txt",
+        "size": 446,
+        "sha256": "ef223be2f0d312c227530f166abce6631608e9b6c373c979dc08959a24e3248c"
+      }
+    },
+    {
+      "tag": "v0.1.0-beta.2",
+      "version": "0.1.0-beta.2",
+      "name": "Bonfire 0.1.0 Beta 2",
+      "channel": "beta",
+      "publishedAt": "2026-11-17T19:14:51Z",
+      "htmlUrl": "https://github.com/airanluo-dot/Bonfire/releases/tag/v0.1.0-beta.2",
+      "summary": "Bonfire 0.1.0 Beta 2 更新了 Windows 安装体验，并在 Windows 和 macOS 上启用统一的篝火 Logo。",
+      "platforms": {
+        "windows": {
+          "installer": {
+            "name": "Bonfire-0.1.0-beta.2-Windows-x64-Setup.exe",
+            "url": "https://github.com/airanluo-dot/Bonfire/releases/download/v0.1.0-beta.2/Bonfire-0.1.0-beta.2-Windows-x64-Setup.exe",
+            "size": 65191154,
+            "sha256": "b945e33bf9a4f132434a7560201cd075675e77ef925ff9641feb375c7f104b3f"
+          },
+          "portable": {
+            "name": "Bonfire-0.1.0-beta.2-Windows-x64-Portable.zip",
+            "url": "https://github.com/airanluo-dot/Bonfire/releases/download/v0.1.0-beta.2/Bonfire-0.1.0-beta.2-Windows-x64-Portable.zip",
+            "size": 93277909,
+            "sha256": "5d5a9f46588390a1d22afd87fa0b1f388ad317b7f650a38df04cc54acf243942"
+          }
+        },
+        "macos": {
+          "installer": {
+            "name": "Bonfire-0.1.0-beta.2-macOS-arm64-Installer.pkg",
+            "url": "https://github.com/airanluo-dot/Bonfire/releases/download/v0.1.0-beta.2/Bonfire-0.1.0-beta.2-macOS-arm64-Installer.pkg",
+            "size": 443228,
+            "sha256": "c1a660a0131ab6629b311b61b469fce90a4d7975ead80b917b2a100f26dadde3"
+          },
+          "portable": {
+            "name": "Bonfire-0.1.0-beta.2-macOS-arm64-Portable.zip",
+            "url": "https://github.com/airanluo-dot/Bonfire/releases/download/v0.1.0-beta.2/Bonfire-0.1.0-beta.2-macOS-arm64-Portable.zip",
+            "size": 443118,
+            "sha256": "e3371902e95117d0495c99c9e3a5136daf7161c7faec1feec2ea64aaaca4cdfb"
+          }
+        }
+      },
+      "checksums": {
+        "name": "SHA256SUMS.txt",
+        "url": "https://github.com/airanluo-dot/Bonfire/releases/download/v0.1.0-beta.2/SHA256SUMS.txt",
+        "size": 446,
+        "sha256": "934072f1bfc01101b4294d63c7c9b63b0e5e198cde7d07349fd146b4e436cc11"
+      }
+    },
+    {
+      "tag": "v0.1.0-beta.1",
+      "version": "0.1.0-beta.1",
+      "name": "Bonfire 0.1.0 Beta 1",
+      "channel": "beta",
+      "publishedAt": "2026-11-17T15:21:06Z",
+      "htmlUrl": "https://github.com/airanluo-dot/Bonfire/releases/tag/v0.1.0-beta.1",
+      "summary": "Bonfire 的首个公开测试版，当前已适配《兽劳动》（Jurodo）。",
+      "platforms": {
+        "windows": {
+          "installer": {
+            "name": "Bonfire-0.1.0-beta.1-Windows-x64-Setup.exe",
+            "url": "https://github.com/airanluo-dot/Bonfire/releases/download/v0.1.0-beta.1/Bonfire-0.1.0-beta.1-Windows-x64-Setup.exe",
+            "size": 64938122,
+            "sha256": "18a1820f6a75c54b6ff6f988eebf0f6f1e9796ed20f64729f1925451c7172ed8"
+          },
+          "portable": {
+            "name": "Bonfire-0.1.0-beta.1-Windows-x64-Portable.zip",
+            "url": "https://github.com/airanluo-dot/Bonfire/releases/download/v0.1.0-beta.1/Bonfire-0.1.0-beta.1-Windows-x64-Portable.zip",
+            "size": 93191451,
+            "sha256": "dff968d09d661d3561ae3d418f7256a1e2419730217961c9e210864154f2a380"
+          }
+        },
+        "macos": {
+          "installer": {
+            "name": "Bonfire-0.1.0-beta.1-macOS-arm64-Installer.pkg",
+            "url": "https://github.com/airanluo-dot/Bonfire/releases/download/v0.1.0-beta.1/Bonfire-0.1.0-beta.1-macOS-arm64-Installer.pkg",
+            "size": 317134,
+            "sha256": "97cbb208ce2f4be06d1cd06301a73bf710fe62ba8585b765c0b83f0dd847c509"
+          },
+          "portable": {
+            "name": "Bonfire-0.1.0-beta.1-macOS-arm64-Portable.zip",
+            "url": "https://github.com/airanluo-dot/Bonfire/releases/download/v0.1.0-beta.1/Bonfire-0.1.0-beta.1-macOS-arm64-Portable.zip",
+            "size": 316738,
+            "sha256": "a5917612fd321200571957fae62b49ca7990b23c2a462ec5f7ccd0e9c5d500cd"
+          }
+        }
+      },
+      "checksums": {
+        "name": "SHA256SUMS.txt",
+        "url": "https://github.com/airanluo-dot/Bonfire/releases/download/v0.1.0-beta.1/SHA256SUMS.txt",
+        "size": 450,
+        "sha256": "1ede95b7076c2b739037f6509ecc95617c88ca3e34be82e15f4adf002eb33102"
+      }
+    }
+  ]
+}

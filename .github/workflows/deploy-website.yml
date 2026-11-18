@@ -1,0 +1,129 @@
+name: Deploy official website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "website/**"
+      - ".github/workflows/deploy-website.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "website/**"
+      - ".github/workflows/deploy-website.yml"
+  release:
+    types: [published, edited, released, unpublished, deleted]
+  # Asset replacements and releases created by other Actions can miss release events.
+  schedule:
+    - cron: "19 */6 * * *"
+  workflow_dispatch:
+
+permissions: {}
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read
+    outputs:
+      tag: ${{ steps.metadata.outputs.tag }}
+      publish: ${{ steps.metadata.outputs.publish }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.sha || github.event.repository.default_branch }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+      - name: Verify offline build
+        if: github.event_name == 'pull_request'
+        run: node website/tools/site.mjs build
+      - name: Build from public releases
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node website/tools/site.mjs release-build
+      - name: Read Pages configuration
+        if: github.event_name != 'pull_request'
+        id: pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6
+      - name: Check if the scheduled feed changed
+        id: metadata
+        if: github.event_name != 'pull_request'
+        env:
+          PAGE_URL: ${{ steps.pages.outputs.base_url }}
+        run: |
+          node -p "'tag='+require('./website/dist/release-data.json').current.tag" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_EVENT_NAME" == "schedule" ]] &&
+             curl --fail --silent --show-error --max-time 30 "${PAGE_URL%/}/release-data.json?run=$GITHUB_RUN_ID" -o "$RUNNER_TEMP/live.json" &&
+             cmp -s website/dist/release-data.json "$RUNNER_TEMP/live.json"; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
+        if: steps.metadata.outputs.publish == 'true'
+        with:
+          path: website/dist
+
+  deploy:
+    needs: build
+    if: needs.build.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.pages.outputs.page_url }}
+    outputs:
+      url: ${{ steps.pages.outputs.page_url }}
+    steps:
+      - id: pages
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5
+
+  verify:
+    needs: [build, deploy]
+    runs-on: ubuntu-latest
+    env:
+      SITE_URL: ${{ needs.deploy.outputs.url }}
+      EXPECTED_TAG: ${{ needs.build.outputs.tag }}
+    steps:
+      - name: Check the public catalog and both platforms
+        run: |
+          node --input-type=module <<'JS'
+          import { setTimeout } from 'node:timers/promises';
+          const base = process.env.SITE_URL.replace(/\/?$/, '/');
+          async function read(path) {
+            const response = await fetch(base + path + '?run=' + process.env.GITHUB_RUN_ID, {signal: AbortSignal.timeout(15000)});
+            if (!response.ok) throw Error(path + ': ' + response.status);
+            return response.json();
+          }
+          for (let attempt = 1;; attempt++) {
+            try {
+              const [feed, games, win, mac] = await Promise.all(['release-data.json','games.json','api/v1/beta.json','api/macos/v1/beta.json'].map(read));
+              if (!games.games?.length || feed.current?.tag !== process.env.EXPECTED_TAG) throw Error('Waiting for published data');
+              for (const [key, channel] of [['windows', win], ['macos', mac]]) {
+                if (channel.release.tag !== feed.current.tag) throw Error('Mismatched channel ' + key);
+                for (const kind of ['installer','portable']) {
+                  const asset = feed.current.platforms[key][kind];
+                  if (channel.release.assets[kind].url !== asset.url) throw Error('Mismatched asset ' + asset.name);
+                  const res = await fetch(asset.url, {method:'HEAD',signal:AbortSignal.timeout(20000)});
+                  if (!res.ok || Number(res.headers.get('content-length')) !== asset.size) throw Error(asset.name + ': ' + res.status);
+                }
+              }
+              console.log('Verified ' + feed.current.tag + ' and four public downloads.');
+              break;
+            } catch (err) {
+              if (attempt >= 12) throw err;
+              console.warn(err.message);
+              await setTimeout(10000);
+            }
+          }
+          JS
